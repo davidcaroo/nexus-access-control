@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine, Shield, AlarmClockPlus, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine, Shield, AlarmClockPlus, Settings, QrCode } from 'lucide-react';
 import { AppContext } from '../App';
 
 export const Sidebar: React.FC = () => {
@@ -72,6 +72,15 @@ export const Sidebar: React.FC = () => {
         )}
         
         <div className="!my-4 border-t border-slate-800"></div>
+
+        <NavLink 
+          to="/"
+          target="_blank"
+          className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors text-slate-300 hover:bg-slate-800 hover:text-white"
+        >
+          <QrCode size={20} />
+          Terminal de Acceso
+        </NavLink>
 
         <NavLink 
           to="/admin/settings" 
