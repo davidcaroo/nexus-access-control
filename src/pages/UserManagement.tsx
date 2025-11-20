@@ -23,7 +23,7 @@ const UserManagement: React.FC = () => {
     full_name: '',
     email: '',
     password: '',
-    role: 'employee' as Role,
+    role: 'admin' as Role, // Default to admin now
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -67,7 +67,7 @@ const UserManagement: React.FC = () => {
     } else {
       setIsEditing(false);
       setCurrentUser(null);
-      setFormData({ full_name: '', email: '', password: '', role: 'employee' });
+      setFormData({ full_name: '', email: '', password: '', role: 'admin' });
     }
     setShowModal(true);
   };
@@ -219,7 +219,6 @@ const UserManagement: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
                 <select className="w-full px-3 py-2 border border-gray-300 rounded-lg" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as Role})}>
-                  <option value="employee">Empleado</option>
                   <option value="admin">Admin</option>
                   <option value="superadmin">Superadmin</option>
                 </select>
