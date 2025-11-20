@@ -7,6 +7,7 @@ import { Session } from '@supabase/supabase-js';
 import { ToastProvider } from './src/components/ToastProvider';
 import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
+import { SidebarProvider } from './src/context/SidebarContext';
 
 // Pages
 import Login from './pages/Login';
@@ -175,8 +176,10 @@ const App: React.FC = () => {
 
   return (
     <AppContext.Provider value={contextValue}>
-      <ToastProvider />
-      <HashRouter><AppRoutes /></HashRouter>
+      <SidebarProvider>
+        <ToastProvider />
+        <HashRouter><AppRoutes /></HashRouter>
+      </SidebarProvider>
     </AppContext.Provider>
   );
 };

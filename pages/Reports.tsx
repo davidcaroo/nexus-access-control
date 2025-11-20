@@ -32,12 +32,12 @@ const Reports: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <h1 className="text-2xl font-bold text-gray-800">Reportes de Asistencia</h1>
-        <Button onClick={downloadCSV} variant="outline" className="gap-2"><Download size={18} /> Exportar CSV</Button>
+        <Button onClick={downloadCSV} variant="outline" className="gap-2 self-start sm:self-auto"><Download size={18} /> Exportar CSV</Button>
       </div>
       <Card>
-        <div className="flex gap-4 mb-6 p-4 bg-gray-50 rounded-lg border">
+        <div className="flex flex-wrap gap-4 mb-6 p-4 bg-gray-50 rounded-lg border items-center">
           <div className="flex items-center gap-2"><Filter size={18} className="text-gray-500" /><span className="font-medium">Filtros:</span></div>
           <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="px-3 py-2 border rounded-lg text-sm" />
           <select value={filterType} onChange={e => setFilterType(e.target.value as any)} className="px-3 py-2 border rounded-lg text-sm">

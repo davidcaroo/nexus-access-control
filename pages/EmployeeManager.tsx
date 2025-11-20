@@ -271,12 +271,12 @@ const EmployeeManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Gestión de Personal</h1>
           <p className="text-gray-500">Administre empleados y sus credenciales de acceso</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 self-start sm:self-auto">
           <input type="file" ref={bulkFileInputRef} className="hidden" accept=".csv" onChange={handleBulkUpload} />
           <Button variant="outline" onClick={() => bulkFileInputRef.current?.click()} isLoading={isBulkUploading}>
             <FileUp size={18} className="mr-2" /> Carga Masiva
@@ -286,11 +286,11 @@ const EmployeeManager: React.FC = () => {
       </div>
 
       <Card>
-        <div className="p-4 border-b flex justify-between items-center">
-          <Input placeholder="Buscar por nombre, cédula o departamento..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="max-w-sm" />
+        <div className="p-4 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <Input placeholder="Buscar por nombre, cédula o departamento..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full sm:max-w-sm" />
           <a href="data:text/csv;charset=utf-8,Nombre%20Completo,C%C3%A9dula,Cargo,Departamento%0AJuan%20Perez,123456,Desarrollador,Tecnolog%C3%ADa" 
              download="plantilla_empleados.csv" 
-             className="text-sm text-blue-600 hover:underline">
+             className="text-sm text-blue-600 hover:underline self-end sm:self-auto">
             Descargar plantilla CSV
           </a>
         </div>
