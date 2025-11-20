@@ -1,4 +1,4 @@
-export type Role = 'superadmin' | 'admin' | 'employee' | 'hr' | 'manager';
+export type Role = 'superadmin' | 'admin' | 'employee';
 
 export interface User {
   id: string;
@@ -11,21 +11,18 @@ export interface Employee {
   id: string;
   cedula: string;
   nombre: string;
-  foto: string; // URL or Base64
-  qrCode: string;
+  foto: string;
   cargo: string;
   departamento: string;
-  horario: {
-    entrada: string;
-    salida: string;
-  };
+  horario_entrada: string;
+  horario_salida: string;
   estado: 'activo' | 'inactivo';
-  fechaIngreso: string;
+  fecha_ingreso: string;
 }
 
 export interface AttendanceRecord {
-  id: string;
-  empleadoId: string;
+  id: number;
+  employee_id: string;
   tipo: 'entrada' | 'salida';
   fecha: string; // ISO Date string YYYY-MM-DD
   hora: string; // HH:mm:ss
@@ -41,6 +38,6 @@ export interface AuthState {
 export interface GeminiAnalysisResult {
   nombre?: string;
   cedula?: string;
-  cargo?: string; // Inferred
+  cargo?: string;
   description?: string;
 }
