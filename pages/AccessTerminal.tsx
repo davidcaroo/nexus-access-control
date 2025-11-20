@@ -64,12 +64,31 @@ const AccessTerminal: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col relative overflow-hidden">
-      <header className="relative z-10 p-6 flex justify-between items-center border-b border-white/10">
-        <div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center"><QrCode className="w-6 h-6" /></div><div><h1 className="text-2xl font-bold">Punto de Acceso</h1><p className="text-slate-400 text-sm">Terminal Principal</p></div></div>
-        <div className="flex items-center gap-6"><Link to="/admin/dashboard" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm"><Shield size={16} /> Admin</Link><div className="text-right"><div className="text-4xl font-mono">{currentTime.toLocaleTimeString('es-ES', { hour12: false })}</div><div className="text-slate-400 text-sm">{currentTime.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div></div></div>
+      <header className="relative z-10 p-4 sm:p-6 flex justify-between items-center border-b border-white/10">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center shrink-0">
+            <QrCode className="w-6 h-6" />
+          </div>
+          <div className="hidden sm:block">
+            <h1 className="text-2xl font-bold">Punto de Acceso</h1>
+            <p className="text-slate-400 text-sm">Terminal Principal</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <Link to="/admin/dashboard" className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">
+            <Shield size={16} />
+            <span className="hidden sm:inline">Admin</span>
+          </Link>
+          <div className="text-right">
+            <div className="text-3xl sm:text-4xl font-mono">{currentTime.toLocaleTimeString('es-ES', { hour12: false })}</div>
+            <div className="text-slate-400 text-xs sm:text-sm">
+              {currentTime.toLocaleDateString('es-ES', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </div>
+          </div>
+        </div>
       </header>
 
-      <main className="flex-1 relative z-10 flex items-center justify-center p-6">
+      <main className="flex-1 relative z-10 flex items-center justify-center p-4 sm:p-6">
         <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-8">
             <div className="bg-slate-800/50 p-2 rounded-2xl border border-white/10 flex"><button onClick={() => setMode('scan')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 ${mode === 'scan' ? 'bg-blue-600' : 'text-slate-400'}`}><QrCode size={18} /> Escáner QR</button><button onClick={() => setMode('manual')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 ${mode === 'manual' ? 'bg-blue-600' : 'text-slate-400'}`}><UserIcon size={18} /> Teclado</button></div>
