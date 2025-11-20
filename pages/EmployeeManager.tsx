@@ -126,7 +126,7 @@ const EmployeeManager: React.FC = () => {
         setIsUploading(false);
       }
     };
-    reader.readDataURL(file);
+    reader.readAsDataURL(file);
   };
 
   const handleBulkUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -135,50 +135,75 @@ const EmployeeManager: React.FC = () => {
 
     setIsBulkUploading(true);
     const reader = new FileReader();
+
     reader.onload = async (e) => {
-      const text = e.target?.result as string;
-      const rows = text.split('\n').filter(row => row.trim() !== '');
-      const header = rows.shift()?.split(',').map(h => h.trim()); // Remove header
+      try {
+        const text = e.target?.result as string;
+        const rows = text.split('\n').filter(row => row.trim() !== '');
+        
+        if (rows.length < 2) { // Must have header + at least one data row
+          toast.error("Archivo CSV inválido o vacío. Debe contener una cabecera y al menos un empleado.");
+          return;
+        }
+        
+        rows.shift(); // Remove header row
 
-      if (!header || header.length < 4) {
-        toast.error("Formato de CSV inválido. Asegúrese de que tenga las columnas correctas.");
-        setIsBulkUploading(false);
-        return;
-      }
+        const newEmployees = rows.map(row => {
+          const values = row.split(',').map(v => v.trim());
+          if (values.length < 4 || !values[0] || !values[1]) {
+            return null;
+          }
+          
+          const nombre = values[0];
+          const cedula = values[1];
+          const cargo = values[2];
+          const departamento = values[3];
 
-      const newEmployees = rows.map(row => {
-        const values = row.split(',').map(v => v.trim());
-        const cedula = values[1];
-        return {
-          nombre: values[0],
-          cedula: cedula,
-          cargo: values[2],
-          departamento: values[3],
-          estado: 'activo' as 'activo',
-          horario_entrada: '09:00:00',
-          horario_salida: '18:00:00',
-          fecha_ingreso: new Date().toISOString().split('T')[0],
-          foto: `https://api.dicebear.com/8.x/initials/svg?seed=${values[0]}`, // Placeholder photo
-          qr_code_url: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${cedula}`,
-        };
-      }).filter(emp => emp.nombre && emp.cedula);
+          return {
+            nombre,
+            cedula,
+            cargo,
+            departamento,
+            estado: 'activo' as 'activo',
+            horario_entrada: '09:00:00',
+            horario_salida: '18:00:00',
+            fecha_ingreso: new Date().toISOString().split('T')[0],
+            foto: `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(nombre)}`,
+            qr_code_url: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(cedula)}`,
+          };
+        }).filter(Boolean);
 
-      if (newEmployees.length === 0) {
-        toast.error("No se encontraron empleados válidos en el archivo.");
-        setIsBulkUploading(false);
-        return;
-      }
+        if (newEmployees.length === 0) {
+          toast.error("No se encontraron empleados válidos en el archivo. Verifique el formato del CSV.");
+          return;
+        }
 
-      const { error } = await supabase.from('employees').insert(newEmployees);
+        const { error } = await supabase.from('employees').insert(newEmployees as any[]);
 
-      if (error) {
-        toast.error(`Error en la carga masiva: ${error.message}`);
-      } else {
+        if (error) {
+          throw new Error(error.message);
+        }
+
         toast.success(`${newEmployees.length} empleados han sido registrados exitosamente.`);
-        fetchEmployees(); // Refresh the list
+        fetchEmployees();
+      } catch (err: any) {
+        toast.error(`Error en la carga masiva: ${err.message}`);
+      } finally {
+        setIsBulkUploading(false);
+        if (event.target) {
+          event.target.value = '';
+        }
       }
-      setIsBulkUploading(false);
     };
+
+    reader.onerror = () => {
+      toast.error("Error al leer el archivo.");
+      setIsBulkUploading(false);
+      if (event.target) {
+        event.target.value = '';
+      }
+    };
+
     reader.readAsText(file);
   };
 
