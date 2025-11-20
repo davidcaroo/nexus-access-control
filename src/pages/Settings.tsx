@@ -2,7 +2,7 @@ import React, { useState, useContext, useRef } from 'react';
 import { AppContext } from '../../App';
 import { supabase } from '../integrations/supabase/client';
 import { Card, Input, Button } from '../../components/UIComponents';
-import { User, Mail, Lock, Upload } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const Settings: React.FC = () => {
@@ -14,11 +14,7 @@ const Settings: React.FC = () => {
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
   const avatarFileRef = useRef<HTMLInputElement>(null);
 
-  const [email, setEmail] = useState(user?.email || '');
-  const [isEmailSaving, setIsEmailSaving] = useState(false);
-
-  const [password, setPassword] = useState('');
-  const [isPasswordSaving, setIsPasswordSaving] = useState(false);
+  const [isPasswordResetSending, setIsPasswordResetSending] = useState(false);
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +55,6 @@ const Settings: React.FC = () => {
 
     const { data: { publicUrl } } = supabase.storage.from('employee_photos').getPublicUrl(filePath);
     
-    // Add a cache-busting query parameter to ensure the new image is displayed
     const finalUrl = `${publicUrl}?t=${new Date().getTime()}`;
 
     const { error: updateError } = await supabase
@@ -76,33 +71,22 @@ const Settings: React.FC = () => {
     setIsAvatarUploading(false);
   };
 
-  const handleEmailUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsEmailSaving(true);
-    const { error } = await supabase.auth.updateUser({ email });
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success('Correo actualizado. Revisa tu bandeja de entrada para confirmar.');
-    }
-    setIsEmailSaving(false);
-  };
-
-  const handlePasswordUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password.length < 6) {
-      toast.error('La contraseña debe tener al menos 6 caracteres.');
+  const handlePasswordResetRequest = async () => {
+    if (!user?.email) {
+      toast.error("No se pudo encontrar tu correo electrónico.");
       return;
     }
-    setIsPasswordSaving(true);
-    const { error } = await supabase.auth.updateUser({ password });
+    setIsPasswordResetSending(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+      redirectTo: window.location.origin,
+    });
+
     if (error) {
       toast.error(error.message);
     } else {
-      toast.success('Contraseña actualizada correctamente.');
-      setPassword('');
+      toast.success('Enlace enviado. Revisa tu correo para continuar.');
     }
-    setIsPasswordSaving(false);
+    setIsPasswordResetSending(false);
   };
 
   if (!user) return <div>Cargando...</div>;
@@ -156,19 +140,16 @@ const Settings: React.FC = () => {
           </Card>
 
           <Card title="Cambiar Contraseña">
-            <form onSubmit={handlePasswordUpdate} className="space-y-4">
-              <Input
-                label="Nueva Contraseña"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Dejar en blanco para no cambiar"
-                required
-              />
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Para cambiar tu contraseña, te enviaremos un enlace seguro a tu correo electrónico. Haz clic en el botón para iniciar el proceso.
+              </p>
               <div className="text-right">
-                <Button type="submit" isLoading={isPasswordSaving}>Actualizar Contraseña</Button>
+                <Button onClick={handlePasswordResetRequest} isLoading={isPasswordResetSending}>
+                  Enviar enlace de recuperación
+                </Button>
               </div>
-            </form>
+            </div>
           </Card>
         </div>
       </div>
