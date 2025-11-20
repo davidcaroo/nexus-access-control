@@ -58,28 +58,34 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const fetchSession = async (session: Session | null) => {
-      if (session) {
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        
-        if (profile && (profile.role === 'admin' || profile.role === 'superadmin')) {
-          const user: User = {
-            id: session.user.id,
-            email: session.user.email,
-            full_name: profile.full_name,
-            role: profile.role as Role,
-          };
-          setAuthState({ isAuthenticated: true, user });
-        } else {
-          if (profile && profile.role === 'employee') {
-            toast.error('Los empleados no tienen acceso al panel de administración.');
+      try {
+        if (session) {
+          const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+          
+          if (profile && (profile.role === 'admin' || profile.role === 'superadmin')) {
+            const user: User = {
+              id: session.user.id,
+              email: session.user.email,
+              full_name: profile.full_name,
+              role: profile.role as Role,
+            };
+            setAuthState({ isAuthenticated: true, user });
+          } else {
+            if (profile && profile.role === 'employee') {
+              toast.error('Los empleados no tienen acceso al panel de administración.');
+            }
+            await supabase.auth.signOut();
+            setAuthState({ isAuthenticated: false, user: null });
           }
-          await supabase.auth.signOut();
+        } else {
           setAuthState({ isAuthenticated: false, user: null });
         }
-      } else {
+      } catch (error) {
+        console.error("Error fetching session:", error);
         setAuthState({ isAuthenticated: false, user: null });
+      } finally {
+        setIsSessionLoading(false);
       }
-      setIsSessionLoading(false);
     };
 
     supabase.auth.getSession().then(({ data: { session } }) => fetchSession(session));
