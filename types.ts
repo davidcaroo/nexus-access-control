@@ -5,6 +5,7 @@ export interface User {
   email?: string;
   full_name: string;
   role: Role;
+  avatar_url?: string;
 }
 
 export interface Employee {
@@ -15,7 +16,7 @@ export interface Employee {
   cargo: string;
   departamento: string;
   horario_entrada: string;
-  horario_salida: string;
+  horario_salida:string;
   estado: 'activo' | 'inactivo';
   fecha_ingreso: string;
   qr_code_url?: string;

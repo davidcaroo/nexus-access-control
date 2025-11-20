@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine, Shield, AlarmClockPlus } from 'lucide-react';
+import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine, Shield, AlarmClockPlus, Settings } from 'lucide-react';
 import { AppContext } from '../App';
 
 export const Sidebar: React.FC = () => {
@@ -70,27 +70,30 @@ export const Sidebar: React.FC = () => {
             Usuarios y Roles
           </NavLink>
         )}
+        
+        <div className="!my-4 border-t border-slate-800"></div>
 
-        <div className="!mt-8 px-4">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Accesos Rápidos</p>
-          <NavLink 
-            to="/" 
-            target="_blank"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-emerald-400 hover:bg-slate-800 transition-colors border border-dashed border-slate-700"
-          >
-            <ScanLine size={20} />
-            Abrir Terminal QR
-          </NavLink>
-        </div>
+        <NavLink 
+          to="/admin/settings" 
+          className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
+        >
+          <Settings size={20} />
+          Ajustes
+        </NavLink>
+
       </nav>
 
-      <div className="p-4 border-t border-slate-800">
+      <div className="mt-auto p-4 border-t border-slate-800">
         {authState.user && (
           <>
             <div className="flex items-center gap-3 px-4 py-3 mb-2">
-              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold">
-                {authState.user.full_name?.charAt(0).toUpperCase()}
-              </div>
+              {authState.user.avatar_url ? (
+                <img src={authState.user.avatar_url} alt="Avatar" className="w-8 h-8 rounded-full object-cover" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold">
+                  {authState.user.full_name?.charAt(0).toUpperCase()}
+                </div>
+              )}
               <div className="overflow-hidden">
                 <p className="text-sm font-medium truncate">{authState.user.full_name}</p>
                 <p className="text-xs text-slate-500 capitalize">{authState.user.role}</p>

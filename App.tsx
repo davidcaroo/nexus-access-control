@@ -16,6 +16,7 @@ import EmployeeManager from './pages/EmployeeManager';
 import Reports from './pages/Reports';
 import UserManagement from './src/pages/UserManagement';
 import OvertimeReport from './pages/OvertimeReport';
+import Settings from './src/pages/Settings';
 
 // Context for global state
 export const AppContext = React.createContext<{
@@ -26,6 +27,7 @@ export const AppContext = React.createContext<{
   fetchEmployees: () => void;
   fetchRecords: () => void;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   addRecord: (cedula: string, tipo: 'entrada' | 'salida', metodo: 'manual' | 'qr') => Promise<{ success: boolean; message: string; employee?: Employee }>;
   addEmployee: (emp: Partial<Employee>) => Promise<{ error: any }>;
   updateEmployee: (id: string, emp: Partial<Employee>) => Promise<{ error: any }>;
@@ -47,6 +49,23 @@ const App: React.FC = () => {
     if (!error) setRecords(data || []);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+      if (profile) {
+        const user: User = {
+          id: session.user.id,
+          email: session.user.email,
+          full_name: profile.full_name,
+          role: profile.role as Role,
+          avatar_url: profile.avatar_url,
+        };
+        setAuthState({ isAuthenticated: true, user });
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (authState.isAuthenticated) {
       fetchEmployees();
@@ -55,7 +74,6 @@ const App: React.FC = () => {
   }, [authState.isAuthenticated, fetchEmployees, fetchRecords]);
 
   useEffect(() => {
-    // This single listener handles initial session and all subsequent auth changes.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       try {
         if (session) {
@@ -67,13 +85,13 @@ const App: React.FC = () => {
               email: session.user.email,
               full_name: profile.full_name,
               role: profile.role as Role,
+              avatar_url: profile.avatar_url,
             };
             setAuthState({ isAuthenticated: true, user });
           } else {
             if (profile?.role === 'employee') {
               toast.error('Los empleados no tienen acceso al panel de administración.');
             }
-            // Ensure sign out if profile is not valid for admin access
             await supabase.auth.signOut();
             setAuthState({ isAuthenticated: false, user: null });
           }
@@ -84,7 +102,6 @@ const App: React.FC = () => {
         console.error("Error handling auth state change:", error);
         setAuthState({ isAuthenticated: false, user: null });
       } finally {
-        // This is crucial: set loading to false after the check is complete.
         setIsSessionLoading(false);
       }
     });
@@ -97,27 +114,25 @@ const App: React.FC = () => {
 
     const recordsChannel = supabase
       .channel('public:attendance_records')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'attendance_records' },
-        () => fetchRecords()
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_records' }, () => fetchRecords())
       .subscribe();
 
     const employeesChannel = supabase
       .channel('public:employees')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'employees' },
-        () => fetchEmployees()
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => fetchEmployees())
+      .subscribe();
+      
+    const profilesChannel = supabase
+      .channel('public:profiles')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${authState.user?.id}` }, () => refreshUser())
       .subscribe();
 
     return () => {
       supabase.removeChannel(recordsChannel);
       supabase.removeChannel(employeesChannel);
+      supabase.removeChannel(profilesChannel);
     };
-  }, [authState.isAuthenticated, fetchRecords, fetchEmployees]);
+  }, [authState.isAuthenticated, fetchRecords, fetchEmployees, refreshUser, authState.user?.id]);
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
@@ -129,7 +144,6 @@ const App: React.FC = () => {
     if (empError || !employee) return { success: false, message: 'Empleado no encontrado' };
 
     const now = new Date();
-    
     const isLate = tipo === 'entrada' && now.toTimeString().slice(0, 8) > employee.horario_entrada;
 
     const { error } = await supabase.from('attendance_records').insert({
@@ -150,14 +164,14 @@ const App: React.FC = () => {
   }, []);
 
   const updateEmployee = useCallback(async (id: string, emp: Partial<Employee>) => {
-    const { id: _, ...updateData } = emp; // Exclude id from the update payload
+    const { id: _, ...updateData } = emp;
     const { error } = await supabase.from('employees').update(updateData).eq('id', id);
     return { error };
   }, []);
 
   const contextValue = useMemo(() => ({
-    authState, employees, records, isSessionLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords
-  }), [authState, employees, records, isSessionLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords]);
+    authState, employees, records, isSessionLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, refreshUser
+  }), [authState, employees, records, isSessionLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, refreshUser]);
 
   return (
     <AppContext.Provider value={contextValue}>
@@ -193,6 +207,7 @@ const AppRoutes = () => {
         {authState.user?.role === 'superadmin' && (
           <Route path="users" element={<UserManagement />} />
         )}
+        <Route path="settings" element={<Settings />} />
         <Route path="reports" element={<Reports />} />
         <Route index element={<Navigate to="/admin/dashboard" />} />
       </Route>
