@@ -39,6 +39,10 @@ const Login: React.FC = () => {
             localization={{
               variables: {
                 sign_in: { email_label: 'Correo Electrónico', password_label: 'Contraseña', button_label: 'Iniciar Sesión' },
+                sign_up: {
+                  link_text: '',
+                  message: '',
+                },
                 forgotten_password: { email_label: 'Correo Electrónico', button_label: 'Enviar instrucciones', link_text: '¿Olvidaste tu contraseña?' }
               },
             }}
