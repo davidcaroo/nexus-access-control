@@ -1,0 +1,7 @@
+{
+  "name": "Nexus Access Control",
+  "description": "A comprehensive personnel access control system with AI-powered ID verification and detailed reporting.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
