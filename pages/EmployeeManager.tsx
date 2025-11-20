@@ -16,7 +16,7 @@ const EmployeeManager: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -58,7 +58,6 @@ const EmployeeManager: React.FC = () => {
 
     try {
       const dataToSave = { ...formData };
-      // Generate QR code if it doesn't exist
       if (!dataToSave.qr_code_url && dataToSave.cedula) {
         dataToSave.qr_code_url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${dataToSave.cedula}`;
       }
@@ -81,11 +80,11 @@ const EmployeeManager: React.FC = () => {
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, skipAnalysis = false) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsAnalyzing(true);
+    setIsUploading(true);
     setAnalysisError('');
 
     const filePath = `public/${Date.now()}-${file.name}`;
@@ -93,12 +92,18 @@ const EmployeeManager: React.FC = () => {
 
     if (uploadError) {
       setAnalysisError("Error al subir la imagen.");
-      setIsAnalyzing(false);
+      setIsUploading(false);
       return;
     }
 
     const { data: { publicUrl } } = supabase.storage.from('employee_photos').getPublicUrl(filePath);
     setFormData(prev => ({ ...prev, foto: publicUrl }));
+
+    if (skipAnalysis) {
+      setIsUploading(false);
+      toast.success('Foto actualizada. Guarde los cambios para confirmar.');
+      return;
+    }
 
     const reader = new FileReader();
     reader.onloadend = async () => {
@@ -116,7 +121,7 @@ const EmployeeManager: React.FC = () => {
       } catch (err) {
         setAnalysisError("Error al analizar con IA. Intente nuevamente.");
       } finally {
-        setIsAnalyzing(false);
+        setIsUploading(false);
       }
     };
     reader.readDataURL(file);
@@ -220,12 +225,18 @@ const EmployeeManager: React.FC = () => {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"><div className="bg-white rounded-lg w-full max-w-2xl shadow-xl max-h-[90vh] overflow-y-auto">
           <div className="p-6 border-b flex justify-between items-center sticky top-0 bg-white z-10"><h2 className="text-xl font-bold">{isEditing ? 'Editar Empleado' : 'Registrar Nuevo Empleado'}</h2><button onClick={handleCloseModal}><X size={24} /></button></div>
           <form onSubmit={handleSave} className="p-6 space-y-6">
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, isEditing)} />
             {!isEditing && (
-              <div className="bg-blue-50 p-4 rounded-lg border"><div className="flex items-start gap-4"><div className="bg-blue-100 p-2 rounded-lg text-blue-600"><Sparkles size={24} /></div><div><h3 className="font-semibold text-blue-900">Autocompletar con IA</h3><p className="text-sm text-blue-700 mb-3">Suba una foto del documento de identidad. Gemini analizará la imagen para extraer datos.</p><Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()} isLoading={isAnalyzing}><Upload size={16} className="mr-2" /> Subir Imagen</Button><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />{analysisError && <p className="text-xs text-red-500 mt-2">{analysisError}</p>}</div></div></div>
+              <div className="bg-blue-50 p-4 rounded-lg border"><div className="flex items-start gap-4"><div className="bg-blue-100 p-2 rounded-lg text-blue-600"><Sparkles size={24} /></div><div><h3 className="font-semibold text-blue-900">Autocompletar con IA</h3><p className="text-sm text-blue-700 mb-3">Suba una foto del documento de identidad. Gemini analizará la imagen para extraer datos.</p><Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()} isLoading={isUploading}><Upload size={16} className="mr-2" /> Subir Imagen</Button>{analysisError && <p className="text-xs text-red-500 mt-2">{analysisError}</p>}</div></div></div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="md:col-span-1 flex flex-col items-center gap-4">
                 <div className="w-32 h-32 rounded-full bg-gray-100 border-2 border-dashed flex items-center justify-center overflow-hidden">{formData.foto ? <img src={formData.foto} className="w-full h-full object-cover" alt="Preview" /> : <Camera className="text-gray-400" />}</div>
+                {isEditing && (
+                  <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} isLoading={isUploading}>
+                    <Upload size={14} className="mr-2" /> Cambiar Foto
+                  </Button>
+                )}
               </div>
               <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input label="Cédula / ID *" value={formData.cedula || ''} onChange={e => setFormData({...formData, cedula: e.target.value})} required />
