@@ -4,6 +4,7 @@ import { User, Role } from '../../types';
 import { Card, Button, Badge, Input } from '../../components/UIComponents';
 import { Plus, Edit, Trash2, X, UserX, UserCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { ConfirmationModal } from '../../components/ConfirmationModal';
 
 interface ManagedUser extends User {
   email: string;
@@ -25,6 +26,10 @@ const UserManagement: React.FC = () => {
     role: 'employee' as Role,
   });
   const [isSaving, setIsSaving] = useState(false);
+
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<ManagedUser | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -101,19 +106,28 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  const handleDelete = async (user: ManagedUser) => {
-    if (window.confirm(`¿Está seguro de que desea eliminar a ${user.full_name}? Esta acción no se puede deshacer.`)) {
-      try {
-        const { error: invokeError } = await supabase.functions.invoke('manage-users', {
-          method: 'DELETE',
-          body: { id: user.id },
-        });
-        if (invokeError) throw invokeError;
-        toast.success('Usuario eliminado correctamente.');
-        fetchUsers();
-      } catch (err: any) {
-        toast.error(err.message || 'Error al eliminar el usuario.');
-      }
+  const handleDeleteRequest = (user: ManagedUser) => {
+    setUserToDelete(user);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!userToDelete) return;
+    setIsDeleting(true);
+    try {
+      const { error: invokeError } = await supabase.functions.invoke('manage-users', {
+        method: 'DELETE',
+        body: { id: userToDelete.id },
+      });
+      if (invokeError) throw invokeError;
+      toast.success('Usuario eliminado correctamente.');
+      fetchUsers();
+      setIsDeleteModalOpen(false);
+      setUserToDelete(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Error al eliminar el usuario.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -181,7 +195,7 @@ const UserManagement: React.FC = () => {
                       <Button variant="outline" size="sm" onClick={() => handleToggleBan(user)} title={user.is_banned ? 'Desbloquear' : 'Bloquear'}>
                         {user.is_banned ? <UserCheck size={14} className="text-green-600" /> : <UserX size={14} className="text-red-600" />}
                       </Button>
-                      <Button variant="danger" size="sm" onClick={() => handleDelete(user)} title="Eliminar"><Trash2 size={14} /></Button>
+                      <Button variant="danger" size="sm" onClick={() => handleDeleteRequest(user)} title="Eliminar"><Trash2 size={14} /></Button>
                     </div>
                   </td>
                 </tr>
@@ -218,6 +232,16 @@ const UserManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={confirmDelete}
+        title="Eliminar Usuario"
+        message={`¿Está seguro de que desea eliminar a ${userToDelete?.full_name}? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        isConfirming={isDeleting}
+      />
     </div>
   );
 };
