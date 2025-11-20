@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Clock, QrCode, User as UserIcon, LogIn, LogOut, AlertCircle, Shield } from 'lucide-react';
+import { QrCode, User as UserIcon, LogIn, LogOut, AlertCircle, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AppContext } from '../App';
 import { Button, Card } from '../components/UIComponents';
 import { Employee } from '../types';
 import toast from 'react-hot-toast';
+import { QrScannerModal } from '../src/components/QrScannerModal';
 
 const AccessTerminal: React.FC = () => {
-  const { addRecord, employees, records } = useContext(AppContext)!;
+  const { addRecord, records } = useContext(AppContext)!;
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mode, setMode] = useState<'scan' | 'manual'>('scan');
   const [cedulaInput, setCedulaInput] = useState('');
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string, employee?: Employee }>({ type: 'idle', message: '' });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -26,11 +28,11 @@ const AccessTerminal: React.FC = () => {
     }
   }, [status]);
 
-  const processAccess = async (id: string, tipo: 'entrada' | 'salida', metodo: 'manual' | 'qr') => {
-    if (!id || isProcessing) return;
+  const processAccess = async (cedula: string, tipo: 'entrada' | 'salida', metodo: 'manual' | 'qr') => {
+    if (!cedula || isProcessing) return;
     setIsProcessing(true);
     try {
-      const result = await addRecord(id, tipo, metodo);
+      const result = await addRecord(cedula, tipo, metodo);
       if (result.success) {
         setStatus({ type: 'success', message: result.message, employee: result.employee });
         toast.success(result.message);
@@ -48,22 +50,32 @@ const AccessTerminal: React.FC = () => {
     }
   };
   
-  const simulateScan = () => {
-    const simulatedCedula = '101010';
-    const employee = employees.find(e => e.cedula === simulatedCedula);
-    if (!employee) {
-        toast.error("Empleado de simulación no encontrado.");
-        return;
+  const handleScan = async (scannedCedula: string) => {
+    setIsScannerOpen(false); // Close camera immediately
+    
+    const { data: employee, error } = await supabase.from('employees').select('id').eq('cedula', scannedCedula).single();
+    if (error || !employee) {
+      setStatus({ type: 'error', message: 'Empleado no encontrado' });
+      toast.error('Empleado no encontrado');
+      return;
     }
-    // Find the last record for this specific employee to toggle
-    const lastRecord = records.find(r => r.employee_id === employee.id);
+
+    const lastRecord = records
+      .filter(r => r.employee_id === employee.id)
+      .sort((a, b) => new Date(`${b.fecha}T${b.hora}`).getTime() - new Date(`${a.fecha}T${a.hora}`).getTime())[0];
+      
     const type = !lastRecord || lastRecord.tipo === 'salida' ? 'entrada' : 'salida';
     
-    processAccess(simulatedCedula, type, 'qr');
+    processAccess(scannedCedula, type, 'qr');
   };
 
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col relative overflow-hidden">
+      <QrScannerModal 
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScan={handleScan}
+      />
       <header className="relative z-10 p-4 sm:p-6 flex justify-between items-center border-b border-white/10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center shrink-0">
@@ -119,7 +131,7 @@ const AccessTerminal: React.FC = () => {
                     <QrCode className="w-24 h-24 text-white/10" />
                     <p className="absolute bottom-4 text-xs text-blue-400">APUNTE EL CÓDIGO QR</p>
                   </div>
-                  <Button onClick={simulateScan} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg py-3 px-8">Escanear</Button>
+                  <Button onClick={() => setIsScannerOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg py-3 px-8">Escanear</Button>
                 </div>
               ) : (
                 <div className="p-8">
@@ -138,9 +150,9 @@ const AccessTerminal: React.FC = () => {
           <div className="hidden lg:block space-y-8 text-slate-300">
             <h2 className="text-3xl font-bold text-white mb-4">Instrucciones</h2>
             <ul className="space-y-4">
-              <li className="flex items-start gap-4"><div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold shrink-0">1</div><p className="mt-1">Seleccione el método de identificación (QR o Cédula).</p></li>
-              <li className="flex items-start gap-4"><div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold shrink-0">2</div><p className="mt-1">Espere la confirmación visual del sistema.</p></li>
-              <li className="flex items-start gap-4"><div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold shrink-0">3</div><p className="mt-1">Si presenta problemas, contacte a Talento Humano.</p></li>
+              <li className="flex items-start gap-4"><div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold shrink-0">1</div><p className="mt-1">Presione "Escanear" y autorice el uso de la cámara.</p></li>
+              <li className="flex items-start gap-4"><div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold shrink-0">2</div><p className="mt-1">Alinee el código QR del empleado dentro del visor.</p></li>
+              <li className="flex items-start gap-4"><div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold shrink-0">3</div><p className="mt-1">El sistema registrará el acceso automáticamente.</p></li>
             </ul>
           </div>
         </div>
