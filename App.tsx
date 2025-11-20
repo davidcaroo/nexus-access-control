@@ -135,7 +135,7 @@ const AppRoutes = () => {
     <Routes>
       <Route path="/" element={<AccessTerminal />} />
       <Route path="/login" element={!authState.isAuthenticated ? <Login /> : <Navigate to="/admin/dashboard" />} />
-      <Route path="/admin" element={authState.isAuthenticated ? <Layout /> : <Navigate to="/login />}>
+      <Route path="/admin" element={authState.isAuthenticated ? <Layout /> : <Navigate to="/login" />}>
         <Route path="dashboard" element={<Dashboard />} />
         {(authState.user?.role === 'admin' || authState.user?.role === 'superadmin') && (
           <Route path="employees" element={<EmployeeManager />} />
