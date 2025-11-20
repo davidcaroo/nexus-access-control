@@ -38,16 +38,14 @@ const App: React.FC = () => {
   const [isSessionLoading, setIsSessionLoading] = useState(true);
 
   const fetchEmployees = useCallback(async () => {
-    if (!authState.isAuthenticated) return;
     const { data, error } = await supabase.from('employees').select('*').order('nombre', { ascending: true });
     if (!error) setEmployees(data || []);
-  }, [authState.isAuthenticated]);
+  }, []);
 
   const fetchRecords = useCallback(async () => {
-    if (!authState.isAuthenticated) return;
     const { data, error } = await supabase.from('attendance_records').select('*').order('created_at', { ascending: false });
     if (!error) setRecords(data || []);
-  }, [authState.isAuthenticated]);
+  }, []);
 
   useEffect(() => {
     if (authState.isAuthenticated) {
@@ -57,7 +55,8 @@ const App: React.FC = () => {
   }, [authState.isAuthenticated, fetchEmployees, fetchRecords]);
 
   useEffect(() => {
-    const fetchSession = async (session: Session | null) => {
+    // This single listener handles initial session and all subsequent auth changes.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       try {
         if (session) {
           const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
@@ -71,9 +70,10 @@ const App: React.FC = () => {
             };
             setAuthState({ isAuthenticated: true, user });
           } else {
-            if (profile && profile.role === 'employee') {
+            if (profile?.role === 'employee') {
               toast.error('Los empleados no tienen acceso al panel de administración.');
             }
+            // Ensure sign out if profile is not valid for admin access
             await supabase.auth.signOut();
             setAuthState({ isAuthenticated: false, user: null });
           }
@@ -81,15 +81,14 @@ const App: React.FC = () => {
           setAuthState({ isAuthenticated: false, user: null });
         }
       } catch (error) {
-        console.error("Error fetching session:", error);
+        console.error("Error handling auth state change:", error);
         setAuthState({ isAuthenticated: false, user: null });
       } finally {
+        // This is crucial: set loading to false after the check is complete.
         setIsSessionLoading(false);
       }
-    };
+    });
 
-    supabase.auth.getSession().then(({ data: { session } }) => fetchSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => fetchSession(session));
     return () => subscription.unsubscribe();
   }, []);
 
