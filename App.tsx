@@ -6,6 +6,7 @@ import { supabase } from './src/integrations/supabase/client';
 import { Session } from '@supabase/supabase-js';
 import { ToastProvider } from './src/components/ToastProvider';
 import toast from 'react-hot-toast';
+import { Loader2 } from 'lucide-react';
 
 // Pages
 import Login from './pages/Login';
@@ -21,6 +22,7 @@ export const AppContext = React.createContext<{
   authState: AuthState;
   employees: Employee[];
   records: AttendanceRecord[];
+  isSessionLoading: boolean;
   fetchEmployees: () => void;
   fetchRecords: () => void;
   logout: () => void;
@@ -33,6 +35,7 @@ const App: React.FC = () => {
   const [authState, setAuthState] = useState<AuthState>({ isAuthenticated: false, user: null });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
 
   const fetchEmployees = useCallback(async () => {
     if (!authState.isAuthenticated) return;
@@ -58,7 +61,6 @@ const App: React.FC = () => {
       if (session) {
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
         
-        // Role-based access control
         if (profile && (profile.role === 'admin' || profile.role === 'superadmin')) {
           const user: User = {
             id: session.user.id,
@@ -68,7 +70,6 @@ const App: React.FC = () => {
           };
           setAuthState({ isAuthenticated: true, user });
         } else {
-          // If user is 'employee' or has no valid role, deny access to admin panel
           if (profile && profile.role === 'employee') {
             toast.error('Los empleados no tienen acceso al panel de administración.');
           }
@@ -78,6 +79,7 @@ const App: React.FC = () => {
       } else {
         setAuthState({ isAuthenticated: false, user: null });
       }
+      setIsSessionLoading(false);
     };
 
     supabase.auth.getSession().then(({ data: { session } }) => fetchSession(session));
@@ -144,8 +146,8 @@ const App: React.FC = () => {
   };
 
   const contextValue = useMemo(() => ({
-    authState, employees, records, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords
-  }), [authState, employees, records, fetchEmployees, fetchRecords]);
+    authState, employees, records, isSessionLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords
+  }), [authState, employees, records, isSessionLoading, fetchEmployees, fetchRecords]);
 
   return (
     <AppContext.Provider value={contextValue}>
@@ -156,7 +158,16 @@ const App: React.FC = () => {
 };
 
 const AppRoutes = () => {
-  const { authState } = React.useContext(AppContext)!;
+  const { authState, isSessionLoading } = React.useContext(AppContext)!;
+
+  if (isSessionLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900">
+        <Loader2 className="w-8 h-8 text-white animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <Routes>
       <Route path="/" element={<AccessTerminal />} />

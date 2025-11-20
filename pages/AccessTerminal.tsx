@@ -66,7 +66,7 @@ const AccessTerminal: React.FC = () => {
     <div className="min-h-screen bg-slate-900 text-white flex flex-col relative overflow-hidden">
       <header className="relative z-10 p-6 flex justify-between items-center border-b border-white/10">
         <div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center"><QrCode className="w-6 h-6" /></div><div><h1 className="text-2xl font-bold">Punto de Acceso</h1><p className="text-slate-400 text-sm">Terminal Principal</p></div></div>
-        <div className="flex items-center gap-6"><Link to="/login" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm"><Shield size={16} /> Admin</Link><div className="text-right"><div className="text-4xl font-mono">{currentTime.toLocaleTimeString('es-ES', { hour12: false })}</div><div className="text-slate-400 text-sm">{currentTime.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div></div></div>
+        <div className="flex items-center gap-6"><Link to="/admin/dashboard" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm"><Shield size={16} /> Admin</Link><div className="text-right"><div className="text-4xl font-mono">{currentTime.toLocaleTimeString('es-ES', { hour12: false })}</div><div className="text-slate-400 text-sm">{currentTime.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div></div></div>
       </header>
 
       <main className="flex-1 relative z-10 flex items-center justify-center p-6">
