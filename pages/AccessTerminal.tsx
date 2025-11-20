@@ -6,6 +6,7 @@ import { Button, Card } from '../components/UIComponents';
 import { Employee } from '../types';
 import toast from 'react-hot-toast';
 import { QrScannerModal } from '../src/components/QrScannerModal';
+import { supabase } from '../src/integrations/supabase/client';
 
 const AccessTerminal: React.FC = () => {
   const { addRecord, records } = useContext(AppContext)!;
@@ -51,12 +52,11 @@ const AccessTerminal: React.FC = () => {
   };
   
   const handleScan = async (scannedCedula: string) => {
-    setIsScannerOpen(false); // Close camera immediately
-    
     const { data: employee, error } = await supabase.from('employees').select('id').eq('cedula', scannedCedula).single();
     if (error || !employee) {
       setStatus({ type: 'error', message: 'Empleado no encontrado' });
       toast.error('Empleado no encontrado');
+      setIsScannerOpen(false); // Close on error
       return;
     }
 
@@ -66,7 +66,8 @@ const AccessTerminal: React.FC = () => {
       
     const type = !lastRecord || lastRecord.tipo === 'salida' ? 'entrada' : 'salida';
     
-    processAccess(scannedCedula, type, 'qr');
+    await processAccess(scannedCedula, type, 'qr');
+    setIsScannerOpen(false); // Close after processing is complete
   };
 
   return (
