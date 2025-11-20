@@ -2,9 +2,9 @@ export type Role = 'admin' | 'hr' | 'manager';
 
 export interface User {
   id: string;
-  username: string;
+  email?: string;
   name: string;
-  role: Role;
+  role: Role | null; // Role can be null for new users without a profile
 }
 
 export interface Employee {

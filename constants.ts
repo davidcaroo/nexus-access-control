@@ -1,10 +1,4 @@
-import { Employee, User, AttendanceRecord } from "./types";
-
-export const MOCK_USERS: User[] = [
-  { id: 'u1', username: 'admin', name: 'Carlos Admin', role: 'admin' },
-  { id: 'u2', username: 'rh', name: 'Ana RRHH', role: 'hr' },
-  { id: 'u3', username: 'gerencia', name: 'Roberto Boss', role: 'manager' },
-];
+import { Employee, AttendanceRecord } from "./types";
 
 export const MOCK_EMPLOYEES: Employee[] = [
   {

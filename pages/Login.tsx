@@ -1,20 +1,20 @@
-import React, { useState, useContext } from 'react';
-import { Lock, ScanLine } from 'lucide-react';
+import React, { useContext, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Auth } from '@supabase/auth-ui-react';
+import { ThemeSupa } from '@supabase/auth-ui-shared';
+import { ScanLine } from 'lucide-react';
+import { supabase } from '../integrations/supabase/client';
 import { AppContext } from '../App';
-import { Button, Input, Card } from '../components/UIComponents';
 
 const Login: React.FC = () => {
-  const { login } = useContext(AppContext)!;
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin');
-  const [error, setError] = useState('');
+  const { authState } = useContext(AppContext)!;
+  const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!login(username, password)) {
-      setError('Credenciales inválidas. Prueba: admin, rh, o gerencia');
+  useEffect(() => {
+    if (authState.isAuthenticated) {
+      navigate('/admin/dashboard');
     }
-  };
+  }, [authState.isAuthenticated, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
@@ -27,43 +27,35 @@ const Login: React.FC = () => {
           <p className="text-slate-400 mt-2">Sistema Integral de Control de Personal</p>
         </div>
 
-        <Card className="shadow-2xl border-none">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Iniciar Sesión</h2>
-              <p className="text-sm text-gray-500">Ingrese sus credenciales para continuar</p>
-            </div>
-
-            <Input 
-              label="Usuario"
-              value={username} 
-              onChange={e => setUsername(e.target.value)}
-              placeholder="ej. admin"
-            />
-            
-            <Input 
-              label="Contraseña"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-            />
-
-            {error && (
-              <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center gap-2">
-                <Lock size={16} />
-                {error}
-              </div>
-            )}
-
-            <Button type="submit" className="w-full py-3 text-lg">
-              Acceder al Sistema
-            </Button>
-            
-            <div className="mt-4 text-center text-xs text-gray-400">
-               Usuarios demo: admin / rh / gerencia
-            </div>
-          </form>
-        </Card>
+        <div className="bg-white rounded-xl shadow-2xl p-8">
+          <Auth
+            supabaseClient={supabase}
+            appearance={{ theme: ThemeSupa }}
+            providers={[]}
+            theme="light"
+            localization={{
+              variables: {
+                sign_in: {
+                  email_label: 'Correo Electrónico',
+                  password_label: 'Contraseña',
+                  button_label: 'Iniciar Sesión',
+                  link_text: '¿Ya tienes cuenta? Inicia sesión',
+                },
+                sign_up: {
+                  email_label: 'Correo Electrónico',
+                  password_label: 'Contraseña',
+                  button_label: 'Registrarse',
+                  link_text: '¿No tienes cuenta? Regístrate',
+                },
+                forgotten_password: {
+                  email_label: 'Correo Electrónico',
+                  button_label: 'Enviar instrucciones',
+                  link_text: '¿Olvidaste tu contraseña?',
+                }
+              },
+            }}
+          />
+        </div>
       </div>
     </div>
   );

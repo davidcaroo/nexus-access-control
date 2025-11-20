@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { MOCK_USERS, MOCK_EMPLOYEES, MOCK_RECORDS } from './constants';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { MOCK_EMPLOYEES, MOCK_RECORDS } from './constants';
 import { User, Employee, AttendanceRecord, AuthState } from './types';
 import { Layout } from './components/Layout';
+import { supabase } from './integrations/supabase/client';
+import { Session } from '@supabase/supabase-js';
 
 // Pages
 import Login from './pages/Login';
@@ -16,7 +18,6 @@ export const AppContext = React.createContext<{
   authState: AuthState;
   employees: Employee[];
   records: AttendanceRecord[];
-  login: (u: string, p: string) => boolean;
   logout: () => void;
   addRecord: (cedula: string, type?: 'entrada' | 'salida') => { success: boolean; message: string; employee?: Employee };
   addEmployee: (emp: Employee) => void;
@@ -25,11 +26,8 @@ export const AppContext = React.createContext<{
 } | null>(null);
 
 const App: React.FC = () => {
-  // Initialize state from localStorage or constants
-  const [authState, setAuthState] = useState<AuthState>(() => {
-    const saved = localStorage.getItem('nexus_auth');
-    return saved ? JSON.parse(saved) : { isAuthenticated: false, user: null };
-  });
+  // Supabase handles session persistence, no need for localStorage for auth
+  const [authState, setAuthState] = useState<AuthState>({ isAuthenticated: false, user: null });
 
   const [employees, setEmployees] = useState<Employee[]>(() => {
     const saved = localStorage.getItem('nexus_employees');
@@ -41,23 +39,46 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : MOCK_RECORDS;
   });
 
-  // Persistence
-  useEffect(() => localStorage.setItem('nexus_auth', JSON.stringify(authState)), [authState]);
+  // Persistence for mock data
   useEffect(() => localStorage.setItem('nexus_employees', JSON.stringify(employees)), [employees]);
   useEffect(() => localStorage.setItem('nexus_records', JSON.stringify(records)), [records]);
 
-  // Actions
-  const login = (username: string, _: string): boolean => {
-    // Password check ignored for demo
-    const user = MOCK_USERS.find(u => u.username === username);
-    if (user) {
-      setAuthState({ isAuthenticated: true, user });
-      return true;
-    }
-    return false;
-  };
+  // Supabase auth listener
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        const user: User = {
+          id: session.user.id,
+          email: session.user.email,
+          name: session.user.email || 'Usuario', // Default name to email
+          role: null, // Role management will be a separate feature
+        };
+        setAuthState({ isAuthenticated: true, user });
+      }
+    });
 
-  const logout = () => setAuthState({ isAuthenticated: false, user: null });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        const user: User = {
+          id: session.user.id,
+          email: session.user.email,
+          name: session.user.email || 'Usuario',
+          role: null,
+        };
+        setAuthState({ isAuthenticated: true, user });
+      } else {
+        setAuthState({ isAuthenticated: false, user: null });
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Actions
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setAuthState({ isAuthenticated: false, user: null });
+  };
 
   const addRecord = (cedula: string, typeOverride?: 'entrada' | 'salida') => {
     const employee = employees.find(e => e.cedula === cedula);
@@ -103,7 +124,7 @@ const App: React.FC = () => {
   const deleteEmployee = (id: string) => setEmployees(prev => prev.filter(e => e.id !== id));
 
   const contextValue = useMemo(() => ({
-    authState, employees, records, login, logout, addRecord, addEmployee, updateEmployee, deleteEmployee
+    authState, employees, records, logout, addRecord, addEmployee, updateEmployee, deleteEmployee
   }), [authState, employees, records]);
 
   return (
