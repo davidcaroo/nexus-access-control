@@ -96,21 +96,29 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!authState.isAuthenticated) return;
 
-    const channel = supabase
+    const recordsChannel = supabase
       .channel('public:attendance_records')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'attendance_records' },
-        () => {
-          fetchRecords();
-        }
+        { event: '*', schema: 'public', table: 'attendance_records' },
+        () => fetchRecords()
+      )
+      .subscribe();
+
+    const employeesChannel = supabase
+      .channel('public:employees')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'employees' },
+        () => fetchEmployees()
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(recordsChannel);
+      supabase.removeChannel(employeesChannel);
     };
-  }, [authState.isAuthenticated, fetchRecords]);
+  }, [authState.isAuthenticated, fetchRecords, fetchEmployees]);
 
   const logout = async () => {
     await supabase.auth.signOut();
@@ -134,20 +142,17 @@ const App: React.FC = () => {
 
     if (error) return { success: false, message: 'Error al registrar el acceso' };
     
-    fetchRecords();
     return { success: true, message: `Registro exitoso: ${tipo.toUpperCase()}`, employee };
   };
 
   const addEmployee = async (emp: Partial<Employee>) => {
     const { error } = await supabase.from('employees').insert(emp);
-    if (!error) fetchEmployees();
     return { error };
   };
 
   const updateEmployee = async (id: string, emp: Partial<Employee>) => {
     const { id: _, ...updateData } = emp; // Exclude id from the update payload
     const { error } = await supabase.from('employees').update(updateData).eq('id', id);
-    if (!error) fetchEmployees();
     return { error };
   };
 
