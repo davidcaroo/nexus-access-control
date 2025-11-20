@@ -34,7 +34,7 @@ const Login: React.FC = () => {
             providers={[]}
             theme="light"
             view="sign_in"
-            showLinks={false}
+            showLinks={true}
             socialLayout="horizontal"
             localization={{
               variables: {
