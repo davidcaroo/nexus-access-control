@@ -1,14 +1,14 @@
 import React, { useState, useContext, useRef } from 'react';
 import { AppContext } from '../App';
 import { Button, Input, Card, Badge } from '../components/UIComponents';
-import { Search, Plus, Upload, Sparkles, X, Camera, QrCode } from 'lucide-react';
+import { Search, Plus, Upload, Sparkles, X, Camera, QrCode, FileUp } from 'lucide-react';
 import { Employee } from '../types';
 import { analyzeIDCard } from '../services/geminiService';
 import { supabase } from '../src/integrations/supabase/client';
 import toast from 'react-hot-toast';
 
 const EmployeeManager: React.FC = () => {
-  const { employees, addEmployee, updateEmployee } = useContext(AppContext)!;
+  const { employees, addEmployee, updateEmployee, fetchEmployees } = useContext(AppContext)!;
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -19,6 +19,8 @@ const EmployeeManager: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bulkFileInputRef = useRef<HTMLInputElement>(null);
+  const [isBulkUploading, setIsBulkUploading] = useState(false);
 
   const [showQrModal, setShowQrModal] = useState(false);
   const [selectedEmployeeForQr, setSelectedEmployeeForQr] = useState<Employee | null>(null);
@@ -127,6 +129,59 @@ const EmployeeManager: React.FC = () => {
     reader.readDataURL(file);
   };
 
+  const handleBulkUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsBulkUploading(true);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const text = e.target?.result as string;
+      const rows = text.split('\n').filter(row => row.trim() !== '');
+      const header = rows.shift()?.split(',').map(h => h.trim()); // Remove header
+
+      if (!header || header.length < 4) {
+        toast.error("Formato de CSV inválido. Asegúrese de que tenga las columnas correctas.");
+        setIsBulkUploading(false);
+        return;
+      }
+
+      const newEmployees = rows.map(row => {
+        const values = row.split(',').map(v => v.trim());
+        const cedula = values[1];
+        return {
+          nombre: values[0],
+          cedula: cedula,
+          cargo: values[2],
+          departamento: values[3],
+          estado: 'activo' as 'activo',
+          horario_entrada: '09:00:00',
+          horario_salida: '18:00:00',
+          fecha_ingreso: new Date().toISOString().split('T')[0],
+          foto: `https://api.dicebear.com/8.x/initials/svg?seed=${values[0]}`, // Placeholder photo
+          qr_code_url: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${cedula}`,
+        };
+      }).filter(emp => emp.nombre && emp.cedula);
+
+      if (newEmployees.length === 0) {
+        toast.error("No se encontraron empleados válidos en el archivo.");
+        setIsBulkUploading(false);
+        return;
+      }
+
+      const { error } = await supabase.from('employees').insert(newEmployees);
+
+      if (error) {
+        toast.error(`Error en la carga masiva: ${error.message}`);
+      } else {
+        toast.success(`${newEmployees.length} empleados han sido registrados exitosamente.`);
+        fetchEmployees(); // Refresh the list
+      }
+      setIsBulkUploading(false);
+    };
+    reader.readAsText(file);
+  };
+
   const handleOpenQrModal = (emp: Employee) => {
     setSelectedEmployeeForQr(emp);
     setShowQrModal(true);
@@ -190,11 +245,24 @@ const EmployeeManager: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-800">Gestión de Personal</h1>
           <p className="text-gray-500">Administre empleados y sus credenciales de acceso</p>
         </div>
-        <Button onClick={() => handleOpenModal()}><Plus size={18} className="mr-2" /> Nuevo Empleado</Button>
+        <div className="flex gap-2">
+          <input type="file" ref={bulkFileInputRef} className="hidden" accept=".csv" onChange={handleBulkUpload} />
+          <Button variant="outline" onClick={() => bulkFileInputRef.current?.click()} isLoading={isBulkUploading}>
+            <FileUp size={18} className="mr-2" /> Carga Masiva
+          </Button>
+          <Button onClick={() => handleOpenModal()}><Plus size={18} className="mr-2" /> Nuevo Empleado</Button>
+        </div>
       </div>
 
       <Card>
-        <div className="p-4"><Input placeholder="Buscar por nombre, cédula o departamento..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
+        <div className="p-4 border-b flex justify-between items-center">
+          <Input placeholder="Buscar por nombre, cédula o departamento..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="max-w-sm" />
+          <a href="data:text/csv;charset=utf-8,Nombre%20Completo,C%C3%A9dula,Cargo,Departamento%0AJuan%20Perez,123456,Desarrollador,Tecnolog%C3%ADa" 
+             download="plantilla_empleados.csv" 
+             className="text-sm text-blue-600 hover:underline">
+            Descargar plantilla CSV
+          </a>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
