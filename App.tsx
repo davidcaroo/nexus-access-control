@@ -12,6 +12,7 @@ import Dashboard from './pages/Dashboard';
 import AccessTerminal from './pages/AccessTerminal';
 import EmployeeManager from './pages/EmployeeManager';
 import Reports from './pages/Reports';
+import UserManagement from './src/pages/UserManagement';
 
 // Context for global state
 export const AppContext = React.createContext<{
@@ -59,7 +60,6 @@ const App: React.FC = () => {
           };
           setAuthState({ isAuthenticated: true, user });
         } else {
-          // Profile might not be created yet, handle gracefully
           setAuthState({ isAuthenticated: false, user: null });
         }
       } else {
@@ -143,6 +143,9 @@ const AppRoutes = () => {
         <Route path="dashboard" element={<Dashboard />} />
         {(authState.user?.role === 'admin' || authState.user?.role === 'superadmin') && (
           <Route path="employees" element={<EmployeeManager />} />
+        )}
+        {authState.user?.role === 'superadmin' && (
+          <Route path="users" element={<UserManagement />} />
         )}
         <Route path="reports" element={<Reports />} />
         <Route index element={<Navigate to="/admin/dashboard" />} />

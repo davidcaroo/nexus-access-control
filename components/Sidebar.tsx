@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine } from 'lucide-react';
+import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine, Shield } from 'lucide-react';
 import { AppContext } from '../App';
 
 export const Sidebar: React.FC = () => {
@@ -51,7 +51,17 @@ export const Sidebar: React.FC = () => {
           Reportes
         </NavLink>
 
-        <div className="mt-8 px-4">
+        {authState.user?.role === 'superadmin' && (
+          <NavLink 
+            to="/admin/users" 
+            className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
+          >
+            <Shield size={20} />
+            Usuarios y Roles
+          </NavLink>
+        )}
+
+        <div className="!mt-8 px-4">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Accesos Rápidos</p>
           <NavLink 
             to="/" 
