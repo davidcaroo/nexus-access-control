@@ -22,7 +22,7 @@ export const AppContext = React.createContext<{
   fetchEmployees: () => void;
   fetchRecords: () => void;
   logout: () => void;
-  addRecord: (cedula: string) => Promise<{ success: boolean; message: string; employee?: Employee }>;
+  addRecord: (cedula: string, tipo: 'entrada' | 'salida', metodo: 'manual' | 'qr') => Promise<{ success: boolean; message: string; employee?: Employee }>;
   addEmployee: (emp: Partial<Employee>) => Promise<{ error: any }>;
   updateEmployee: (id: string, emp: Partial<Employee>) => Promise<{ error: any }>;
 } | null>(null);
@@ -81,30 +81,25 @@ const App: React.FC = () => {
     setAuthState({ isAuthenticated: false, user: null });
   };
 
-  const addRecord = async (cedula: string) => {
+  const addRecord = async (cedula: string, tipo: 'entrada' | 'salida', metodo: 'manual' | 'qr') => {
     const { data: employee, error: empError } = await supabase.from('employees').select('*').eq('cedula', cedula).single();
     if (empError || !employee) return { success: false, message: 'Empleado no encontrado' };
 
     const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
     
-    const { data: todaysRecords } = await supabase.from('attendance_records').select('tipo').eq('employee_id', employee.id).eq('fecha', dateStr).order('hora', { ascending: false });
-    const lastRecord = todaysRecords?.[0];
-    const type = !lastRecord || lastRecord.tipo === 'salida' ? 'entrada' : 'salida';
-
-    const isLate = type === 'entrada' && now.toTimeString().slice(0, 8) > employee.horario_entrada;
+    const isLate = tipo === 'entrada' && now.toTimeString().slice(0, 8) > employee.horario_entrada;
 
     const { error } = await supabase.from('attendance_records').insert({
       employee_id: employee.id,
-      tipo: type,
-      metodo: 'qr',
+      tipo: tipo,
+      metodo: metodo,
       tardanza: isLate
     });
 
     if (error) return { success: false, message: 'Error al registrar el acceso' };
     
     fetchRecords();
-    return { success: true, message: `Registro exitoso: ${type.toUpperCase()}`, employee };
+    return { success: true, message: `Registro exitoso: ${tipo.toUpperCase()}`, employee };
   };
 
   const addEmployee = async (emp: Partial<Employee>) => {
