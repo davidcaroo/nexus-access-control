@@ -33,7 +33,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose,
         </div>
         <div className="p-1 bg-black">
           <Scanner
-            onResult={(text) => onScan(text)}
+            onResult={(result) => onScan(result.rawValue)}
             onError={handleError}
             components={{
                 finder: false,
