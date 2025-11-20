@@ -1,7 +1,7 @@
 import React, { useState, useContext, useRef } from 'react';
 import { AppContext } from '../App';
 import { Button, Input, Card, Badge } from '../components/UIComponents';
-import { Search, Plus, Upload, Sparkles, X, Camera } from 'lucide-react';
+import { Search, Plus, Upload, Sparkles, X, Camera, QrCode } from 'lucide-react';
 import { Employee } from '../types';
 import { analyzeIDCard } from '../services/geminiService';
 import { supabase } from '../src/integrations/supabase/client';
@@ -19,6 +19,9 @@ const EmployeeManager: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [selectedEmployeeForQr, setSelectedEmployeeForQr] = useState<Employee | null>(null);
 
   const filteredEmployees = employees.filter(e => 
     e.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -54,9 +57,15 @@ const EmployeeManager: React.FC = () => {
     setIsSaving(true);
 
     try {
+      const dataToSave = { ...formData };
+      // Generate QR code if it doesn't exist
+      if (!dataToSave.qr_code_url && dataToSave.cedula) {
+        dataToSave.qr_code_url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${dataToSave.cedula}`;
+      }
+
       const result = isEditing
-        ? await updateEmployee(formData.id!, formData)
-        : await addEmployee(formData);
+        ? await updateEmployee(formData.id!, dataToSave)
+        : await addEmployee(dataToSave);
 
       if (result.error) {
         toast.error(`Error al guardar: ${result.error.message}`);
@@ -79,7 +88,6 @@ const EmployeeManager: React.FC = () => {
     setIsAnalyzing(true);
     setAnalysisError('');
 
-    // Upload to Supabase Storage
     const filePath = `public/${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage.from('employee_photos').upload(filePath, file);
 
@@ -89,11 +97,9 @@ const EmployeeManager: React.FC = () => {
       return;
     }
 
-    // Get public URL
     const { data: { publicUrl } } = supabase.storage.from('employee_photos').getPublicUrl(filePath);
     setFormData(prev => ({ ...prev, foto: publicUrl }));
 
-    // Convert to Base64 for Gemini analysis
     const reader = new FileReader();
     reader.onloadend = async () => {
       const base64 = reader.result as string;
@@ -114,6 +120,37 @@ const EmployeeManager: React.FC = () => {
       }
     };
     reader.readDataURL(file);
+  };
+
+  const handleOpenQrModal = (emp: Employee) => {
+    setSelectedEmployeeForQr(emp);
+    setShowQrModal(true);
+  };
+
+  const handleCloseQrModal = () => {
+    setShowQrModal(false);
+    setSelectedEmployeeForQr(null);
+  };
+
+  const handlePrintQr = () => {
+    if (selectedEmployeeForQr?.qr_code_url) {
+      const printWindow = window.open('', '_blank');
+      printWindow?.document.write(`
+        <html><head><title>Imprimir Código QR</title></head>
+        <body style="text-align: center; margin-top: 50px; font-family: sans-serif;">
+          <h2>${selectedEmployeeForQr.nombre}</h2>
+          <p style="font-size: 1.2em; color: #555;">${selectedEmployeeForQr.cedula}</p>
+          <img src="${selectedEmployeeForQr.qr_code_url}" alt="Código QR" style="width: 250px; height: 250px;" />
+          <script>
+            window.onload = function() {
+              window.print();
+              window.close();
+            }
+          </script>
+        </body></html>
+      `);
+      printWindow?.document.close();
+    }
   };
 
   return (
@@ -141,7 +178,12 @@ const EmployeeManager: React.FC = () => {
                   <td className="px-4 py-3">{emp.cargo}</td>
                   <td className="px-4 py-3">{emp.departamento}</td>
                   <td className="px-4 py-3"><Badge color={emp.estado === 'activo' ? 'green' : 'red'}>{emp.estado}</Badge></td>
-                  <td className="px-4 py-3 text-right"><Button variant="outline" size="sm" onClick={() => handleOpenModal(emp)}>Editar</Button></td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleOpenModal(emp)}>Editar</Button>
+                      <Button variant="secondary" size="sm" onClick={() => handleOpenQrModal(emp)} title="Ver Código QR"><QrCode size={16} /></Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -173,6 +215,31 @@ const EmployeeManager: React.FC = () => {
             <div className="pt-4 border-t flex justify-end gap-3"><Button type="button" variant="secondary" onClick={handleCloseModal}>Cancelar</Button><Button type="submit" isLoading={isSaving}>{isEditing ? 'Guardar Cambios' : 'Registrar Empleado'}</Button></div>
           </form>
         </div></div>
+      )}
+
+      {showQrModal && selectedEmployeeForQr && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg w-full max-w-xs shadow-xl text-center">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="font-bold text-lg">Código QR de Acceso</h3>
+              <button onClick={handleCloseQrModal}><X size={20} /></button>
+            </div>
+            <div className="p-6 flex flex-col items-center justify-center">
+              {selectedEmployeeForQr.qr_code_url ? (
+                <img src={selectedEmployeeForQr.qr_code_url} alt={`QR for ${selectedEmployeeForQr.nombre}`} className="w-56 h-56" />
+              ) : (
+                <div className="w-56 h-56 bg-gray-100 flex items-center justify-center text-center p-4">
+                  <p className="text-sm text-red-500">No se ha generado un código QR. Edite y guarde al empleado para crearlo.</p>
+                </div>
+              )}
+              <p className="mt-4 font-semibold text-xl">{selectedEmployeeForQr.nombre}</p>
+              <p className="text-gray-500 font-mono">{selectedEmployeeForQr.cedula}</p>
+            </div>
+            <div className="p-4 border-t bg-gray-50 flex justify-end">
+              <Button onClick={handlePrintQr}>Imprimir</Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

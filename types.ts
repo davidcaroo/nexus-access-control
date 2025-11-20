@@ -18,6 +18,7 @@ export interface Employee {
   horario_salida: string;
   estado: 'activo' | 'inactivo';
   fecha_ingreso: string;
+  qr_code_url?: string;
 }
 
 export interface AttendanceRecord {
