@@ -1,5 +1,5 @@
 import React from 'react';
-import QrScanner from 'react-qr-scanner';
+import { Scanner } from '@yudiel/react-qr-scanner';
 import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -12,15 +12,13 @@ interface QrScannerModalProps {
 export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose, onScan }) => {
   if (!isOpen) return null;
 
-  const handleScan = (data: { text: string } | null) => {
-    if (data) {
-      onScan(data.text);
+  const handleError = (error: any) => {
+    console.error(error);
+    if (error?.name === 'NotAllowedError') {
+        toast.error('Permiso de cámara denegado. Por favor, habilítelo en su navegador.');
+    } else {
+        toast.error('No se pudo iniciar la cámara.');
     }
-  };
-
-  const handleError = (err: any) => {
-    console.error(err);
-    toast.error('No se pudo acceder a la cámara. Verifique los permisos en su navegador.');
     onClose();
   };
 
@@ -34,14 +32,18 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose,
           </button>
         </div>
         <div className="p-1 bg-black">
-          <QrScanner
-            delay={300}
-            constraints={{
-              video: { facingMode: 'environment' }
-            }}
+          <Scanner
+            onResult={(text) => onScan(text)}
             onError={handleError}
-            onScan={handleScan}
-            style={{ width: '100%', height: 'auto' }}
+            components={{
+                finder: false,
+            }}
+            styles={{
+                container: { width: '100%' }
+            }}
+            constraints={{
+                facingMode: 'environment'
+            }}
           />
         </div>
         <div className="p-4 text-center text-sm text-slate-400 bg-slate-800">
