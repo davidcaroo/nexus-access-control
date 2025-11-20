@@ -126,85 +126,91 @@ const EmployeeManager: React.FC = () => {
         setIsUploading(false);
       }
     };
-    reader.readAsDataURL(file);
+    reader.readDataURL(file);
   };
 
-  const handleBulkUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBulkUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setIsBulkUploading(true);
-    const reader = new FileReader();
+    
+    try {
+      const text = await file.text();
+      const rows = text.split('\n').filter(row => row.trim() !== '');
 
-    reader.onload = async (e) => {
-      try {
-        const text = e.target?.result as string;
-        const rows = text.split('\n').filter(row => row.trim() !== '');
+      if (rows.length < 2) {
+        toast.error("Archivo CSV inválido o vacío. Debe contener una cabecera y al menos un empleado.");
+        return;
+      }
+      rows.shift(); // Remove header
+
+      const parsedEmployees = rows.map(row => {
+        const values = row.split(',').map(v => v.trim());
+        if (values.length < 4 || !values[0] || !values[1]) return null;
         
-        if (rows.length < 2) { // Must have header + at least one data row
-          toast.error("Archivo CSV inválido o vacío. Debe contener una cabecera y al menos un empleado.");
-          return;
-        }
-        
-        rows.shift(); // Remove header row
+        const nombre = values[0];
+        const cedula = values[1];
+        return {
+          nombre,
+          cedula,
+          cargo: values[2],
+          departamento: values[3],
+          estado: 'activo' as 'activo',
+          horario_entrada: '09:00:00',
+          horario_salida: '18:00:00',
+          fecha_ingreso: new Date().toISOString().split('T')[0],
+          foto: `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(nombre)}`,
+          qr_code_url: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(cedula)}`,
+        };
+      }).filter((emp): emp is NonNullable<typeof emp> => emp !== null);
 
-        const newEmployees = rows.map(row => {
-          const values = row.split(',').map(v => v.trim());
-          if (values.length < 4 || !values[0] || !values[1]) {
-            return null;
-          }
-          
-          const nombre = values[0];
-          const cedula = values[1];
-          const cargo = values[2];
-          const departamento = values[3];
+      if (parsedEmployees.length === 0) {
+        toast.error("No se encontraron empleados válidos en el archivo. Verifique el formato del CSV.");
+        return;
+      }
 
-          return {
-            nombre,
-            cedula,
-            cargo,
-            departamento,
-            estado: 'activo' as 'activo',
-            horario_entrada: '09:00:00',
-            horario_salida: '18:00:00',
-            fecha_ingreso: new Date().toISOString().split('T')[0],
-            foto: `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(nombre)}`,
-            qr_code_url: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(cedula)}`,
-          };
-        }).filter(Boolean);
+      const { data: existingEmployees, error: fetchError } = await supabase.from('employees').select('cedula');
+      if (fetchError) throw fetchError;
+      const existingCedulas = new Set(existingEmployees.map(e => e.cedula));
 
-        if (newEmployees.length === 0) {
-          toast.error("No se encontraron empleados válidos en el archivo. Verifique el formato del CSV.");
-          return;
-        }
+      const employeesToInsert = [];
+      let skippedCount = 0;
+      const cedulasInCsv = new Set();
 
-        const { error } = await supabase.from('employees').insert(newEmployees as any[]);
-
-        if (error) {
-          throw new Error(error.message);
-        }
-
-        toast.success(`${newEmployees.length} empleados han sido registrados exitosamente.`);
-        fetchEmployees();
-      } catch (err: any) {
-        toast.error(`Error en la carga masiva: ${err.message}`);
-      } finally {
-        setIsBulkUploading(false);
-        if (event.target) {
-          event.target.value = '';
+      for (const emp of parsedEmployees) {
+        if (existingCedulas.has(emp.cedula) || cedulasInCsv.has(emp.cedula)) {
+          skippedCount++;
+        } else {
+          employeesToInsert.push(emp);
+          cedulasInCsv.add(emp.cedula);
         }
       }
-    };
 
-    reader.onerror = () => {
-      toast.error("Error al leer el archivo.");
+      if (employeesToInsert.length > 0) {
+        const { error: insertError } = await supabase.from('employees').insert(employeesToInsert);
+        if (insertError) throw insertError;
+      }
+
+      if (employeesToInsert.length > 0) {
+        toast.success(`${employeesToInsert.length} empleados nuevos registrados.`);
+        fetchEmployees();
+      }
+      if (skippedCount > 0) {
+        toast.success(`${skippedCount} empleados fueron omitidos por ser duplicados.`);
+      }
+      if (employeesToInsert.length === 0 && skippedCount === 0) {
+        toast.error("No se procesó ningún empleado. Verifique el archivo.");
+      }
+
+    } catch (err: any) {
+      toast.error(`Error en la carga masiva: ${err.message}`);
+    } finally {
       setIsBulkUploading(false);
       if (event.target) {
         event.target.value = '';
       }
-    };
-
-    reader.readAsText(file);
+    }
   };
 
   const handleOpenQrModal = (emp: Employee) => {
