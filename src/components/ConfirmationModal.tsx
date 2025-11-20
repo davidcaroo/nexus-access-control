@@ -11,6 +11,9 @@ interface ConfirmationModalProps {
   confirmText?: string;
   cancelText?: string;
   isConfirming?: boolean;
+  confirmButtonVariant?: 'primary' | 'secondary' | 'danger' | 'outline';
+  icon?: React.ReactNode;
+  iconBgClass?: string;
 }
 
 export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -22,6 +25,9 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   confirmText = 'Confirmar',
   cancelText = 'Cancelar',
   isConfirming = false,
+  confirmButtonVariant = 'danger',
+  icon = <AlertTriangle className="h-6 w-6 text-red-600" aria-hidden="true" />,
+  iconBgClass = 'bg-red-100',
 }) => {
   if (!isOpen) return null;
 
@@ -30,8 +36,8 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
       <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
         <div className="p-6">
           <div className="flex items-start gap-4">
-            <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
-              <AlertTriangle className="h-6 w-6 text-red-600" aria-hidden="true" />
+            <div className={`mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full ${iconBgClass} sm:mx-0 sm:h-10 sm:w-10`}>
+              {icon}
             </div>
             <div className="mt-0 text-left">
               <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
@@ -47,7 +53,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         </div>
         <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse rounded-b-lg">
           <Button
-            variant="danger"
+            variant={confirmButtonVariant}
             onClick={onConfirm}
             isLoading={isConfirming}
             className="w-full sm:ml-3 sm:w-auto"

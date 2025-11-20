@@ -23,13 +23,17 @@ const UserManagement: React.FC = () => {
     full_name: '',
     email: '',
     password: '',
-    role: 'admin' as Role, // Default to admin now
+    role: 'admin' as Role,
   });
   const [isSaving, setIsSaving] = useState(false);
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<ManagedUser | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [isBanModalOpen, setIsBanModalOpen] = useState(false);
+  const [userToBan, setUserToBan] = useState<ManagedUser | null>(null);
+  const [isBanning, setIsBanning] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -131,21 +135,30 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  const handleToggleBan = async (user: ManagedUser) => {
-    const action = user.is_banned ? 'desbloquear' : 'bloquear';
-    if (window.confirm(`¿Está seguro de que desea ${action} a ${user.full_name}?`)) {
-        try {
-            const { data, error: invokeError } = await supabase.functions.invoke('manage-users', {
-                method: 'PUT',
-                body: { id: user.id, is_banned: !user.is_banned },
-            });
-            if (invokeError) throw invokeError;
-            if (data?.error) throw new Error(data.error);
-            toast.success(`Usuario ${action} correctamente.`);
-            fetchUsers();
-        } catch (err: any) {
-            toast.error(err.message || `Error al ${action} el usuario.`);
-        }
+  const handleBanRequest = (user: ManagedUser) => {
+    setUserToBan(user);
+    setIsBanModalOpen(true);
+  };
+
+  const confirmBanToggle = async () => {
+    if (!userToBan) return;
+    setIsBanning(true);
+    const action = userToBan.is_banned ? 'desbloquear' : 'bloquear';
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('manage-users', {
+        method: 'PUT',
+        body: { id: userToBan.id, is_banned: !userToBan.is_banned },
+      });
+      if (invokeError) throw invokeError;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Usuario ${action === 'bloquear' ? 'bloqueado' : 'desbloqueado'} correctamente.`);
+      fetchUsers();
+    } catch (err: any) {
+      toast.error(err.message || `Error al ${action} el usuario.`);
+    } finally {
+      setIsBanning(false);
+      setIsBanModalOpen(false);
+      setUserToBan(null);
     }
   };
 
@@ -192,7 +205,7 @@ const UserManagement: React.FC = () => {
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Button variant="outline" size="sm" onClick={() => handleOpenModal(user)} title="Editar"><Edit size={14} /></Button>
-                      <Button variant="outline" size="sm" onClick={() => handleToggleBan(user)} title={user.is_banned ? 'Desbloquear' : 'Bloquear'}>
+                      <Button variant="outline" size="sm" onClick={() => handleBanRequest(user)} title={user.is_banned ? 'Desbloquear' : 'Bloquear'}>
                         {user.is_banned ? <UserCheck size={14} className="text-green-600" /> : <UserX size={14} className="text-red-600" />}
                       </Button>
                       <Button variant="danger" size="sm" onClick={() => handleDeleteRequest(user)} title="Eliminar"><Trash2 size={14} /></Button>
@@ -240,6 +253,19 @@ const UserManagement: React.FC = () => {
         message={`¿Está seguro de que desea eliminar a ${userToDelete?.full_name}? Esta acción no se puede deshacer.`}
         confirmText="Eliminar"
         isConfirming={isDeleting}
+      />
+
+      <ConfirmationModal
+        isOpen={isBanModalOpen}
+        onClose={() => setIsBanModalOpen(false)}
+        onConfirm={confirmBanToggle}
+        title={`${userToBan?.is_banned ? 'Desbloquear' : 'Bloquear'} Usuario`}
+        message={`¿Está seguro de que desea ${userToBan?.is_banned ? 'desbloquear' : 'bloquear'} a ${userToBan?.full_name}?`}
+        confirmText={userToBan?.is_banned ? 'Desbloquear' : 'Bloquear'}
+        isConfirming={isBanning}
+        confirmButtonVariant={userToBan?.is_banned ? 'primary' : 'danger'}
+        icon={userToBan?.is_banned ? <UserCheck className="h-6 w-6 text-green-600" /> : <UserX className="h-6 w-6 text-red-600" />}
+        iconBgClass={userToBan?.is_banned ? 'bg-green-100' : 'bg-red-100'}
       />
     </div>
   );
