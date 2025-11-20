@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { Clock, QrCode, User as UserIcon, LogIn, LogOut, AlertCircle, CheckCircle2, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AppContext } from '../App';
 import { Button, Card } from '../components/UIComponents';
 import { Employee } from '../types';
+import toast from 'react-hot-toast';
 
 const AccessTerminal: React.FC = () => {
   const { addRecord } = useContext(AppContext)!;
@@ -28,14 +29,23 @@ const AccessTerminal: React.FC = () => {
   const processAccess = async (id: string) => {
     if (!id || isProcessing) return;
     setIsProcessing(true);
-    const result = await addRecord(id);
-    if (result.success) {
-      setStatus({ type: 'success', message: result.message, employee: result.employee });
-    } else {
-      setStatus({ type: 'error', message: result.message });
+    try {
+      const result = await addRecord(id);
+      if (result.success) {
+        setStatus({ type: 'success', message: result.message, employee: result.employee });
+        toast.success(result.message);
+      } else {
+        setStatus({ type: 'error', message: result.message });
+        toast.error(result.message);
+      }
+    } catch (error) {
+      console.error("Error processing access:", error);
+      setStatus({ type: 'error', message: 'Ocurrió un error inesperado.' });
+      toast.error('Ocurrió un error inesperado.');
+    } finally {
+      setIsProcessing(false);
+      setCedulaInput('');
     }
-    setIsProcessing(false);
-    setCedulaInput('');
   };
   
   const handleManualSubmit = (e: React.FormEvent) => {

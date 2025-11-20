@@ -5,6 +5,7 @@ import { Search, Plus, Upload, Sparkles, X, Camera } from 'lucide-react';
 import { Employee } from '../types';
 import { analyzeIDCard } from '../services/geminiService';
 import { supabase } from '../src/integrations/supabase/client';
+import toast from 'react-hot-toast';
 
 const EmployeeManager: React.FC = () => {
   const { employees, addEmployee, updateEmployee } = useContext(AppContext)!;
@@ -58,13 +59,14 @@ const EmployeeManager: React.FC = () => {
         : await addEmployee(formData);
 
       if (result.error) {
-        alert(`Error al guardar: ${result.error.message}`);
+        toast.error(`Error al guardar: ${result.error.message}`);
       } else {
+        toast.success(isEditing ? 'Empleado actualizado correctamente' : 'Empleado registrado correctamente');
         handleCloseModal();
       }
     } catch (error) {
       console.error("Error inesperado al guardar:", error);
-      alert("Ocurrió un error inesperado. Intente de nuevo.");
+      toast.error("Ocurrió un error inesperado. Intente de nuevo.");
     } finally {
       setIsSaving(false);
     }

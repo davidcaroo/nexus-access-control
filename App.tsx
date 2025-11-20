@@ -4,6 +4,7 @@ import { User, Employee, AttendanceRecord, AuthState, Role } from './types';
 import { Layout } from './components/Layout';
 import { supabase } from './src/integrations/supabase/client';
 import { Session } from '@supabase/supabase-js';
+import { ToastProvider } from './src/components/ToastProvider';
 
 // Pages
 import Login from './pages/Login';
@@ -125,6 +126,7 @@ const App: React.FC = () => {
 
   return (
     <AppContext.Provider value={contextValue}>
+      <ToastProvider />
       <HashRouter><AppRoutes /></HashRouter>
     </AppContext.Provider>
   );
