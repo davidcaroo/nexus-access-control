@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { ScanLine } from 'lucide-react';
-import { supabase } from '../integrations/supabase/client';
+import { supabase } from '../src/integrations/supabase/client';
 import { AppContext } from '../App';
 
 const Login: React.FC = () => {

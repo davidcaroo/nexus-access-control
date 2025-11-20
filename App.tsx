@@ -3,7 +3,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { MOCK_EMPLOYEES, MOCK_RECORDS } from './constants';
 import { User, Employee, AttendanceRecord, AuthState } from './types';
 import { Layout } from './components/Layout';
-import { supabase } from './integrations/supabase/client';
+import { supabase } from './src/integrations/supabase/client';
 import { Session } from '@supabase/supabase-js';
 
 // Pages
