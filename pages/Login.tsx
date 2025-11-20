@@ -43,7 +43,12 @@ const Login: React.FC = () => {
                   link_text: '',
                   message: '',
                 },
-                forgotten_password: { email_label: 'Correo Electrónico', button_label: 'Enviar instrucciones', link_text: '¿Olvidaste tu contraseña?' }
+                forgotten_password: { 
+                  email_label: 'Correo Electrónico', 
+                  button_label: 'Enviar instrucciones', 
+                  link_text: '¿Olvidaste tu contraseña?',
+                  confirmation_text: 'Revisa tu correo para ver el enlace de restablecimiento de contraseña.'
+                }
               },
             }}
           />
