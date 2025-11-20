@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { MOCK_EMPLOYEES, MOCK_RECORDS } from './constants';
-import { User, Employee, AttendanceRecord, AuthState } from './types';
+import { User, Employee, AttendanceRecord, AuthState, Role } from './types';
 import { Layout } from './components/Layout';
 import { supabase } from './src/integrations/supabase/client';
 import { Session } from '@supabase/supabase-js';
@@ -26,7 +26,6 @@ export const AppContext = React.createContext<{
 } | null>(null);
 
 const App: React.FC = () => {
-  // Supabase handles session persistence, no need for localStorage for auth
   const [authState, setAuthState] = useState<AuthState>({ isAuthenticated: false, user: null });
 
   const [employees, setEmployees] = useState<Employee[]>(() => {
@@ -39,42 +38,46 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : MOCK_RECORDS;
   });
 
-  // Persistence for mock data
   useEffect(() => localStorage.setItem('nexus_employees', JSON.stringify(employees)), [employees]);
   useEffect(() => localStorage.setItem('nexus_records', JSON.stringify(records)), [records]);
 
-  // Supabase auth listener
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const fetchSession = async (session: Session | null) => {
       if (session) {
-        const user: User = {
-          id: session.user.id,
-          email: session.user.email,
-          name: session.user.email || 'Usuario', // Default name to email
-          role: null, // Role management will be a separate feature
-        };
-        setAuthState({ isAuthenticated: true, user });
-      }
-    });
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        const user: User = {
-          id: session.user.id,
-          email: session.user.email,
-          name: session.user.email || 'Usuario',
-          role: null,
-        };
-        setAuthState({ isAuthenticated: true, user });
+        if (profile) {
+          const user: User = {
+            id: session.user.id,
+            email: session.user.email,
+            full_name: profile.full_name,
+            role: profile.role as Role,
+          };
+          setAuthState({ isAuthenticated: true, user });
+        } else {
+          // Profile might not be created yet, handle gracefully
+          setAuthState({ isAuthenticated: false, user: null });
+        }
       } else {
         setAuthState({ isAuthenticated: false, user: null });
       }
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      fetchSession(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      fetchSession(session);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Actions
   const logout = async () => {
     await supabase.auth.signOut();
     setAuthState({ isAuthenticated: false, user: null });
@@ -88,21 +91,13 @@ const App: React.FC = () => {
     const dateStr = now.toISOString().split('T')[0];
     const timeStr = now.toLocaleTimeString('es-ES', { hour12: false });
 
-    // Logic to determine entry/exit if not forced
     let type: 'entrada' | 'salida' = typeOverride || 'entrada';
-    
     if (!typeOverride) {
       const todaysRecords = records.filter(r => r.empleadoId === employee.id && r.fecha === dateStr);
       const lastRecord = todaysRecords.sort((a, b) => b.hora.localeCompare(a.hora))[0];
-      
-      if (!lastRecord || lastRecord.tipo === 'salida') {
-        type = 'entrada';
-      } else {
-        type = 'salida';
-      }
+      type = !lastRecord || lastRecord.tipo === 'salida' ? 'entrada' : 'salida';
     }
 
-    // Simple lateness logic (hardcoded 9am)
     const isLate = type === 'entrada' && now.getHours() >= 9 && now.getMinutes() > 5;
 
     const newRecord: AttendanceRecord = {
@@ -111,7 +106,7 @@ const App: React.FC = () => {
       tipo: type,
       fecha: dateStr,
       hora: timeStr,
-      metodo: 'qr', // Assuming manual input counts as verified for this context
+      metodo: 'qr',
       tardanza: isLate
     };
 
@@ -141,21 +136,18 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      {/* Public Access Terminal - Default Route */}
       <Route path="/" element={<AccessTerminal />} />
-
-      {/* Admin Login */}
       <Route path="/login" element={!authState.isAuthenticated ? <Login /> : <Navigate to="/admin/dashboard" />} />
       
-      {/* Protected Admin Routes */}
       <Route path="/admin" element={authState.isAuthenticated ? <Layout /> : <Navigate to="/login" />}>
         <Route path="dashboard" element={<Dashboard />} />
-        <Route path="employees" element={<EmployeeManager />} />
+        {(authState.user?.role === 'admin' || authState.user?.role === 'superadmin') && (
+          <Route path="employees" element={<EmployeeManager />} />
+        )}
         <Route path="reports" element={<Reports />} />
         <Route index element={<Navigate to="/admin/dashboard" />} />
       </Route>
       
-      {/* Catch all redirect to root */}
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );

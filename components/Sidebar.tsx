@@ -33,7 +33,7 @@ export const Sidebar: React.FC = () => {
           Dashboard
         </NavLink>
 
-        {(authState.user?.role === 'admin' || authState.user?.role === 'hr') && (
+        {(authState.user?.role === 'admin' || authState.user?.role === 'superadmin') && (
           <NavLink 
             to="/admin/employees" 
             className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
@@ -65,22 +65,26 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       <div className="p-4 border-t border-slate-800">
-        <div className="flex items-center gap-3 px-4 py-3 mb-2">
-          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold">
-            {authState.user?.name.charAt(0)}
-          </div>
-          <div className="overflow-hidden">
-            <p className="text-sm font-medium truncate">{authState.user?.name}</p>
-            <p className="text-xs text-slate-500 capitalize">{authState.user?.role}</p>
-          </div>
-        </div>
-        <button 
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-400 hover:bg-slate-800 rounded-lg transition-colors"
-        >
-          <LogOut size={18} />
-          Cerrar Sesión
-        </button>
+        {authState.user && (
+          <>
+            <div className="flex items-center gap-3 px-4 py-3 mb-2">
+              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold">
+                {authState.user.full_name?.charAt(0).toUpperCase()}
+              </div>
+              <div className="overflow-hidden">
+                <p className="text-sm font-medium truncate">{authState.user.full_name}</p>
+                <p className="text-xs text-slate-500 capitalize">{authState.user.role}</p>
+              </div>
+            </div>
+            <button 
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-400 hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              <LogOut size={18} />
+              Cerrar Sesión
+            </button>
+          </>
+        )}
       </div>
     </aside>
   );

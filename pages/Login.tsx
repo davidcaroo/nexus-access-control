@@ -33,26 +33,28 @@ const Login: React.FC = () => {
             appearance={{ theme: ThemeSupa }}
             providers={[]}
             theme="light"
+            view="sign_in"
+            socialLayout="horizontal"
             localization={{
               variables: {
-                sign_in: {
-                  email_label: 'Correo Electrónico',
-                  password_label: 'Contraseña',
-                  button_label: 'Iniciar Sesión',
-                  link_text: '¿Ya tienes cuenta? Inicia sesión',
-                },
-                sign_up: {
-                  email_label: 'Correo Electrónico',
-                  password_label: 'Contraseña',
-                  button_label: 'Registrarse',
-                  link_text: '¿No tienes cuenta? Regístrate',
-                },
-                forgotten_password: {
-                  email_label: 'Correo Electrónico',
-                  button_label: 'Enviar instrucciones',
-                  link_text: '¿Olvidaste tu contraseña?',
-                }
+                sign_in: { email_label: 'Correo Electrónico', password_label: 'Contraseña', button_label: 'Iniciar Sesión' },
+                sign_up: { email_label: 'Correo Electrónico', password_label: 'Contraseña', button_label: 'Registrarse', link_text: '¿No tienes cuenta? Regístrate', user_metadata_full_name: 'Nombre Completo' },
+                forgotten_password: { email_label: 'Correo Electrónico', button_label: 'Enviar instrucciones', link_text: '¿Olvidaste tu contraseña?' }
               },
+            }}
+            additionalData={{
+              sign_up: {
+                full_name: '',
+              }
+            }}
+            fields={{
+              signUp: {
+                full_name: {
+                  type: 'text',
+                  label: 'Nombre Completo',
+                  placeholder: 'Ingrese su nombre completo',
+                }
+              }
             }}
           />
         </div>

@@ -1,10 +1,10 @@
-export type Role = 'admin' | 'hr' | 'manager';
+export type Role = 'superadmin' | 'admin' | 'employee' | 'hr' | 'manager';
 
 export interface User {
   id: string;
   email?: string;
-  name: string;
-  role: Role | null; // Role can be null for new users without a profile
+  full_name: string;
+  role: Role;
 }
 
 export interface Employee {
