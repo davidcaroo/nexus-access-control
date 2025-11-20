@@ -114,7 +114,13 @@ const AccessTerminal: React.FC = () => {
               ) : null}
               
               {mode === 'scan' ? (
-                <div className="flex flex-col items-center justify-center h-full p-8 text-center"><div className="relative w-64 h-64 border-2 border-blue-500/50 rounded-3xl flex items-center justify-center mb-6 bg-black/50"><QrCode className="w-24 h-24 text-white/10" /><p className="absolute bottom-4 text-xs text-blue-400">APUNTE EL CÓDIGO QR</p></div><Button onClick={simulateScan} variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">Simular Escaneo</Button></div>
+                <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                  <div className="relative w-64 h-64 border-2 border-blue-500/50 rounded-3xl flex items-center justify-center mb-6 bg-black/50">
+                    <QrCode className="w-24 h-24 text-white/10" />
+                    <p className="absolute bottom-4 text-xs text-blue-400">APUNTE EL CÓDIGO QR</p>
+                  </div>
+                  <Button onClick={simulateScan} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg py-3 px-8">Escanear</Button>
+                </div>
               ) : (
                 <div className="p-8">
                   <h3 className="text-xl font-semibold mb-6 text-center">Ingrese Cédula</h3>
