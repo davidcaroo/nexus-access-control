@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine, Shield } from 'lucide-react';
+import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine, Shield, AlarmClockPlus } from 'lucide-react';
 import { AppContext } from '../App';
 
 export const Sidebar: React.FC = () => {
@@ -50,6 +50,16 @@ export const Sidebar: React.FC = () => {
           <FileBarChart size={20} />
           Reportes
         </NavLink>
+
+        {(authState.user?.role === 'admin' || authState.user?.role === 'superadmin') && (
+          <NavLink 
+            to="/admin/overtime" 
+            className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
+          >
+            <AlarmClockPlus size={20} />
+            Horas Extra
+          </NavLink>
+        )}
 
         {authState.user?.role === 'superadmin' && (
           <NavLink 

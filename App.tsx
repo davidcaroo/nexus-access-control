@@ -13,6 +13,7 @@ import AccessTerminal from './pages/AccessTerminal';
 import EmployeeManager from './pages/EmployeeManager';
 import Reports from './pages/Reports';
 import UserManagement from './src/pages/UserManagement';
+import OvertimeReport from './pages/OvertimeReport';
 
 // Context for global state
 export const AppContext = React.createContext<{
@@ -155,7 +156,10 @@ const AppRoutes = () => {
       <Route path="/admin" element={authState.isAuthenticated ? <Layout /> : <Navigate to="/login" />}>
         <Route path="dashboard" element={<Dashboard />} />
         {(authState.user?.role === 'admin' || authState.user?.role === 'superadmin') && (
-          <Route path="employees" element={<EmployeeManager />} />
+          <>
+            <Route path="employees" element={<EmployeeManager />} />
+            <Route path="overtime" element={<OvertimeReport />} />
+          </>
         )}
         {authState.user?.role === 'superadmin' && (
           <Route path="users" element={<UserManagement />} />
