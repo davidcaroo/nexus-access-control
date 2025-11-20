@@ -25,7 +25,7 @@ export const AppContext = React.createContext<{
   isSessionLoading: boolean;
   fetchEmployees: () => void;
   fetchRecords: () => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   addRecord: (cedula: string, tipo: 'entrada' | 'salida', metodo: 'manual' | 'qr') => Promise<{ success: boolean; message: string; employee?: Employee }>;
   addEmployee: (emp: Partial<Employee>) => Promise<{ error: any }>;
   updateEmployee: (id: string, emp: Partial<Employee>) => Promise<{ error: any }>;
@@ -120,12 +120,12 @@ const App: React.FC = () => {
     };
   }, [authState.isAuthenticated, fetchRecords, fetchEmployees]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await supabase.auth.signOut();
     setAuthState({ isAuthenticated: false, user: null });
-  };
+  }, []);
 
-  const addRecord = async (cedula: string, tipo: 'entrada' | 'salida', metodo: 'manual' | 'qr') => {
+  const addRecord = useCallback(async (cedula: string, tipo: 'entrada' | 'salida', metodo: 'manual' | 'qr') => {
     const { data: employee, error: empError } = await supabase.from('employees').select('*').eq('cedula', cedula).single();
     if (empError || !employee) return { success: false, message: 'Empleado no encontrado' };
 
@@ -143,22 +143,22 @@ const App: React.FC = () => {
     if (error) return { success: false, message: 'Error al registrar el acceso' };
     
     return { success: true, message: `Registro exitoso: ${tipo.toUpperCase()}`, employee };
-  };
+  }, []);
 
-  const addEmployee = async (emp: Partial<Employee>) => {
+  const addEmployee = useCallback(async (emp: Partial<Employee>) => {
     const { error } = await supabase.from('employees').insert(emp);
     return { error };
-  };
+  }, []);
 
-  const updateEmployee = async (id: string, emp: Partial<Employee>) => {
+  const updateEmployee = useCallback(async (id: string, emp: Partial<Employee>) => {
     const { id: _, ...updateData } = emp; // Exclude id from the update payload
     const { error } = await supabase.from('employees').update(updateData).eq('id', id);
     return { error };
-  };
+  }, []);
 
   const contextValue = useMemo(() => ({
     authState, employees, records, isSessionLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords
-  }), [authState, employees, records, isSessionLoading, fetchEmployees, fetchRecords]);
+  }), [authState, employees, records, isSessionLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords]);
 
   return (
     <AppContext.Provider value={contextValue}>
