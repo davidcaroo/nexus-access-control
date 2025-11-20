@@ -34,27 +34,13 @@ const Login: React.FC = () => {
             providers={[]}
             theme="light"
             view="sign_in"
+            showLinks={false}
             socialLayout="horizontal"
             localization={{
               variables: {
                 sign_in: { email_label: 'Correo Electrónico', password_label: 'Contraseña', button_label: 'Iniciar Sesión' },
-                sign_up: { email_label: 'Correo Electrónico', password_label: 'Contraseña', button_label: 'Registrarse', link_text: '¿No tienes cuenta? Regístrate', user_metadata_full_name: 'Nombre Completo' },
                 forgotten_password: { email_label: 'Correo Electrónico', button_label: 'Enviar instrucciones', link_text: '¿Olvidaste tu contraseña?' }
               },
-            }}
-            additionalData={{
-              sign_up: {
-                full_name: '',
-              }
-            }}
-            fields={{
-              signUp: {
-                full_name: {
-                  type: 'text',
-                  label: 'Nombre Completo',
-                  placeholder: 'Ingrese su nombre completo',
-                }
-              }
             }}
           />
         </div>
