@@ -153,6 +153,31 @@ const EmployeeManager: React.FC = () => {
     }
   };
 
+  const handleDownloadQr = async () => {
+    if (selectedEmployeeForQr?.qr_code_url) {
+      try {
+        const response = await fetch(selectedEmployeeForQr.qr_code_url);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        
+        const employeeName = selectedEmployeeForQr.nombre.replace(/[^a-zA-Z0-9]/g, '');
+        const employeeId = selectedEmployeeForQr.cedula;
+        const filename = `${employeeName}-${employeeId}.png`;
+
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error("Error downloading QR code:", error);
+        toast.error("No se pudo descargar el código QR.");
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -235,7 +260,8 @@ const EmployeeManager: React.FC = () => {
               <p className="mt-4 font-semibold text-xl">{selectedEmployeeForQr.nombre}</p>
               <p className="text-gray-500 font-mono">{selectedEmployeeForQr.cedula}</p>
             </div>
-            <div className="p-4 border-t bg-gray-50 flex justify-end">
+            <div className="p-4 border-t bg-gray-50 flex justify-end gap-2">
+              <Button variant="secondary" onClick={handleDownloadQr}>Descargar</Button>
               <Button onClick={handlePrintQr}>Imprimir</Button>
             </div>
           </div>
