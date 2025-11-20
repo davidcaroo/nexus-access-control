@@ -43,23 +43,28 @@ const Settings: React.FC = () => {
     if (!file || !user) return;
 
     setIsAvatarUploading(true);
-    const filePath = `avatars/${user.id}/${Date.now()}-${file.name}`;
+    
+    const fileExt = file.name.split('.').pop();
+    const filePath = `public/avatars/${user.id}.${fileExt}`;
     
     const { error: uploadError } = await supabase.storage
       .from('employee_photos')
       .upload(filePath, file, { upsert: true });
 
     if (uploadError) {
-      toast.error('Error al subir la imagen.');
+      toast.error(`Error al subir la imagen: ${uploadError.message}`);
       setIsAvatarUploading(false);
       return;
     }
 
     const { data: { publicUrl } } = supabase.storage.from('employee_photos').getPublicUrl(filePath);
+    
+    // Add a cache-busting query parameter to ensure the new image is displayed
+    const finalUrl = `${publicUrl}?t=${new Date().getTime()}`;
 
     const { error: updateError } = await supabase
       .from('profiles')
-      .update({ avatar_url: publicUrl })
+      .update({ avatar_url: finalUrl })
       .eq('id', user.id);
     
     if (updateError) {
