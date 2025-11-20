@@ -1,25 +1,24 @@
-import React, { useContext, useMemo } from 'react';
+import React, { useContext, useMemo, useState } from 'react';
 import { AppContext } from '../App';
-import { Card } from '../components/UIComponents';
-import { Users, UserCheck, UserX, Clock, AlertTriangle } from 'lucide-react';
+import { Card, Button } from '../components/UIComponents';
+import { Users, UserCheck, UserX, Clock, Edit } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
+import { ManualAttendanceModal } from '../components/ManualAttendanceModal';
 
 const Dashboard: React.FC = () => {
-  const { employees, records } = useContext(AppContext)!;
+  const { employees, records, authState } = useContext(AppContext)!;
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     const todaysRecords = records.filter(r => r.fecha === today);
 
-    // 1. Calculate "Present Today"
     const presentTodayIds = new Set(todaysRecords.filter(r => r.tipo === 'entrada').map(r => r.employee_id));
     const presentCount = presentTodayIds.size;
 
-    // 2. Calculate "On Site Now"
     const employeeLastStatus = new Map<string, 'entrada' | 'salida'>();
-    // Sort records by time to ensure we get the last status
     const sortedTodaysRecords = [...todaysRecords].sort((a, b) => a.hora.localeCompare(b.hora));
     
     for (const record of sortedTodaysRecords) {
@@ -28,7 +27,6 @@ const Dashboard: React.FC = () => {
 
     const onSiteCount = Array.from(employeeLastStatus.values()).filter(status => status === 'entrada').length;
 
-    // 3. Other stats
     const totalEmployees = employees.length;
     const absentCount = totalEmployees - presentCount;
     const lates = todaysRecords.filter(r => r.tardanza && r.tipo === 'entrada').length;
@@ -36,7 +34,6 @@ const Dashboard: React.FC = () => {
     return { totalEmployees, presentCount, onSiteCount, absentCount, lates };
   }, [employees, records]);
 
-  // Data for the pie chart, now showing "On Site" vs "Left"
   const onSiteChartData = [
     { name: 'En Sitio', value: stats.onSiteCount, color: '#10B981' },
     { name: 'Salieron', value: stats.presentCount - stats.onSiteCount, color: '#F59E0B' },
@@ -44,7 +41,15 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-800">Panel de Control</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-800">Panel de Control</h1>
+        {(authState.user?.role === 'admin' || authState.user?.role === 'superadmin') && (
+          <Button variant="outline" onClick={() => setIsManualModalOpen(true)}>
+            <Edit size={16} className="mr-2" />
+            Registro Manual
+          </Button>
+        )}
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Total Personal" value={stats.totalEmployees} icon={<Users className="text-blue-600" />} />
         <StatCard title="Presentes Hoy" value={stats.presentCount} icon={<UserCheck className="text-emerald-600" />} subtext={`${((stats.presentCount/stats.totalEmployees)*100 || 0).toFixed(0)}% asistencia`} />
@@ -88,6 +93,10 @@ const Dashboard: React.FC = () => {
           </div>
         </Card>
       </div>
+      <ManualAttendanceModal 
+        isOpen={isManualModalOpen} 
+        onClose={() => setIsManualModalOpen(false)} 
+      />
     </div>
   );
 };
