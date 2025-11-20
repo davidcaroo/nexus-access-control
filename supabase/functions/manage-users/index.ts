@@ -27,7 +27,7 @@ const verifySuperAdmin = async (req: Request, supabaseAdmin: SupabaseClient) => 
     .eq('id', user.id)
     .single()
   
-  if (error || profile.role !== 'superadmin') {
+  if (error || !profile || profile.role !== 'superadmin') {
     throw new Error('Permission denied. Not a superadmin.')
   }
   return user
@@ -108,7 +108,7 @@ serve(async (req) => {
         }
         // Keep user_metadata in sync with profile name
         if (typeof full_name !== 'undefined') {
-            authUpdatePayload.data = { full_name };
+            authUpdatePayload.user_metadata = { full_name };
         }
 
         if (Object.keys(authUpdatePayload).length > 0) {
