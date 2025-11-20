@@ -84,29 +84,41 @@ serve(async (req) => {
         return new Response(JSON.stringify(data.user), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
       case 'PUT': {
-        const { id, full_name, role, email, password, is_banned } = await req.json()
-        
-        if (full_name || role) {
+        const { id, full_name, role, email, password, is_banned } = await req.json();
+
+        // --- Profile Update Logic ---
+        const profileUpdatePayload: any = {};
+        if (typeof full_name !== 'undefined') profileUpdatePayload.full_name = full_name;
+        if (typeof role !== 'undefined') profileUpdatePayload.role = role;
+
+        if (Object.keys(profileUpdatePayload).length > 0) {
             const { error: profileError } = await supabaseAdmin
                 .from('profiles')
-                .update({ full_name, role })
-                .eq('id', id)
-            if (profileError) throw profileError
+                .update(profileUpdatePayload)
+                .eq('id', id);
+            if (profileError) throw profileError;
         }
 
-        const authUpdatePayload: any = {}
-        if (email) authUpdatePayload.email = email
-        if (password) authUpdatePayload.password = password
+        // --- Auth Update Logic ---
+        const authUpdatePayload: any = {};
+        if (email) authUpdatePayload.email = email;
+        if (password) authUpdatePayload.password = password;
         if (typeof is_banned !== 'undefined') {
-            authUpdatePayload.ban_duration = is_banned ? '36500d' : 'none' // ~100 years for 'forever'
+            authUpdatePayload.ban_duration = is_banned ? '36500d' : 'none'; // ~100 years for 'forever'
+        }
+        // Keep user_metadata in sync with profile name
+        if (typeof full_name !== 'undefined') {
+            authUpdatePayload.data = { full_name };
         }
 
         if (Object.keys(authUpdatePayload).length > 0) {
-            const { data, error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, authUpdatePayload)
-            if (authError) throw authError
-            return new Response(JSON.stringify(data.user), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+            const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, authUpdatePayload);
+            if (authError) throw authError;
         }
-        return new Response(JSON.stringify({ message: 'Profile updated' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+        return new Response(JSON.stringify({ message: 'User updated successfully' }), { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
       }
       case 'DELETE': {
         const { id } = await req.json()
