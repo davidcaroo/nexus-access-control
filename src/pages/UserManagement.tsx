@@ -76,7 +76,7 @@ const UserManagement: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-800">Gestión de Usuarios y Roles</h1>
-        <p className="text-gray-500">Asigne roles a los usuarios del sistema.</p>
+        <p className="text-gray-500">Asigne roles a los usuarios para controlar su nivel de acceso al panel de administración. Los cambios se aplican de inmediato.</p>
       </div>
 
       <Card>
@@ -128,9 +128,9 @@ const UserManagement: React.FC = () => {
                   >
                     <span className="font-medium capitalize">{role}</span>
                     <p className="text-xs opacity-80">
-                      {role === 'employee' && 'Acceso restringido. Solo para registro de asistencia.'}
-                      {role === 'admin' && 'Puede gestionar empleados y ver reportes.'}
-                      {role === 'superadmin' && 'Acceso total, incluyendo la gestión de roles.'}
+                      {role === 'employee' && 'No tiene acceso al panel. Rol para personal que solo registra asistencia.'}
+                      {role === 'admin' && 'Puede gestionar empleados, ver reportes, registrar asistencia y consultar horas extra.'}
+                      {role === 'superadmin' && 'Acceso total al sistema, incluyendo la gestión de usuarios y roles.'}
                     </p>
                   </button>
                 ))}

@@ -5,6 +5,7 @@ import { Layout } from './components/Layout';
 import { supabase } from './src/integrations/supabase/client';
 import { Session } from '@supabase/supabase-js';
 import { ToastProvider } from './src/components/ToastProvider';
+import toast from 'react-hot-toast';
 
 // Pages
 import Login from './pages/Login';
@@ -56,7 +57,9 @@ const App: React.FC = () => {
     const fetchSession = async (session: Session | null) => {
       if (session) {
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        if (profile) {
+        
+        // Role-based access control
+        if (profile && (profile.role === 'admin' || profile.role === 'superadmin')) {
           const user: User = {
             id: session.user.id,
             email: session.user.email,
@@ -65,6 +68,11 @@ const App: React.FC = () => {
           };
           setAuthState({ isAuthenticated: true, user });
         } else {
+          // If user is 'employee' or has no valid role, deny access to admin panel
+          if (profile && profile.role === 'employee') {
+            toast.error('Los empleados no tienen acceso al panel de administración.');
+          }
+          await supabase.auth.signOut();
           setAuthState({ isAuthenticated: false, user: null });
         }
       } else {
