@@ -49,16 +49,25 @@ const EmployeeManager: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nombre || !formData.cedula) return;
+    
     setIsSaving(true);
 
-    if (isEditing) {
-      await updateEmployee(formData.id!, formData);
-    } else {
-      await addEmployee(formData);
+    try {
+      const result = isEditing
+        ? await updateEmployee(formData.id!, formData)
+        : await addEmployee(formData);
+
+      if (result.error) {
+        alert(`Error al guardar: ${result.error.message}`);
+      } else {
+        handleCloseModal();
+      }
+    } catch (error) {
+      console.error("Error inesperado al guardar:", error);
+      alert("Ocurrió un error inesperado. Intente de nuevo.");
+    } finally {
+      setIsSaving(false);
     }
-    
-    setIsSaving(false);
-    handleCloseModal();
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,7 +111,7 @@ const EmployeeManager: React.FC = () => {
         setIsAnalyzing(false);
       }
     };
-    reader.readAsDataURL(file);
+    reader.readDataURL(file);
   };
 
   return (

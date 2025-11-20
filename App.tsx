@@ -113,7 +113,8 @@ const App: React.FC = () => {
   };
 
   const updateEmployee = async (id: string, emp: Partial<Employee>) => {
-    const { error } = await supabase.from('employees').update(emp).eq('id', id);
+    const { id: _, ...updateData } = emp; // Exclude id from the update payload
+    const { error } = await supabase.from('employees').update(updateData).eq('id', id);
     if (!error) fetchEmployees();
     return { error };
   };
