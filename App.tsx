@@ -76,6 +76,25 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!authState.isAuthenticated) return;
+
+    const channel = supabase
+      .channel('public:attendance_records')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'attendance_records' },
+        () => {
+          fetchRecords();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [authState.isAuthenticated, fetchRecords]);
+
   const logout = async () => {
     await supabase.auth.signOut();
     setAuthState({ isAuthenticated: false, user: null });

@@ -12,21 +12,34 @@ const Dashboard: React.FC = () => {
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     const todaysRecords = records.filter(r => r.fecha === today);
-    
-    const presentIds = new Set(todaysRecords.filter(r => r.tipo === 'entrada').map(r => r.employee_id));
-    
-    const totalEmployees = employees.length;
-    const presentCount = presentIds.size;
-    const absentCount = totalEmployees - presentCount;
-    
-    const lates = todaysRecords.filter(r => r.tardanza).length;
 
-    return { totalEmployees, presentCount, absentCount, lates };
+    // 1. Calculate "Present Today"
+    const presentTodayIds = new Set(todaysRecords.filter(r => r.tipo === 'entrada').map(r => r.employee_id));
+    const presentCount = presentTodayIds.size;
+
+    // 2. Calculate "On Site Now"
+    const employeeLastStatus = new Map<string, 'entrada' | 'salida'>();
+    // Sort records by time to ensure we get the last status
+    const sortedTodaysRecords = [...todaysRecords].sort((a, b) => a.hora.localeCompare(b.hora));
+    
+    for (const record of sortedTodaysRecords) {
+      employeeLastStatus.set(record.employee_id, record.tipo);
+    }
+
+    const onSiteCount = Array.from(employeeLastStatus.values()).filter(status => status === 'entrada').length;
+
+    // 3. Other stats
+    const totalEmployees = employees.length;
+    const absentCount = totalEmployees - presentCount;
+    const lates = todaysRecords.filter(r => r.tardanza && r.tipo === 'entrada').length;
+
+    return { totalEmployees, presentCount, onSiteCount, absentCount, lates };
   }, [employees, records]);
 
-  const chartData = [
-    { name: 'Presentes', value: stats.presentCount, color: '#10B981' },
-    { name: 'Ausentes', value: stats.absentCount, color: '#EF4444' },
+  // Data for the pie chart, now showing "On Site" vs "Left"
+  const onSiteChartData = [
+    { name: 'En Sitio', value: stats.onSiteCount, color: '#10B981' },
+    { name: 'Salieron', value: stats.presentCount - stats.onSiteCount, color: '#F59E0B' },
   ];
 
   return (
@@ -39,19 +52,19 @@ const Dashboard: React.FC = () => {
         <StatCard title="Tardanzas" value={stats.lates} icon={<Clock className="text-amber-600" />} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2" title="Asistencia Actual">
+        <Card className="lg:col-span-2" title="Estado Actual del Personal">
           <div className="h-72 w-full flex flex-col items-center justify-center relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={chartData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                  {chartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                <Pie data={onSiteChartData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                  {onSiteChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                 </Pie>
-                <RechartsTooltip />
+                <RechartsTooltip formatter={(value, name) => [`${value} empleado(s)`, name]} />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-3xl font-bold">{stats.presentCount}</span>
-              <span className="text-xs text-gray-500">en sitio</span>
+              <span className="text-3xl font-bold">{stats.onSiteCount}</span>
+              <span className="text-xs text-gray-500">en sitio ahora</span>
             </div>
           </div>
         </Card>
