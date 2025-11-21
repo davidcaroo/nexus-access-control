@@ -1,4 +1,4 @@
-export type Role = 'superadmin' | 'admin' | 'employee';
+export type RoleName = 'superadmin' | 'admin' | 'hr_manager' | 'department_head' | 'employee'; // Actualizado para incluir nuevos roles
 
 export interface User {
   id: string;
@@ -63,4 +63,20 @@ export interface GeminiAnalysisResult {
   cedula?: string;
   cargo?: string;
   description?: string;
+}
+
+// Nuevas interfaces para Roles y Permisos
+export interface Permission {
+  id: string;
+  action: string;
+  description: string;
+  created_at: string;
+}
+
+export interface Role {
+  id: string;
+  name: RoleName; // Usar el tipo RoleName para el nombre del rol
+  description: string;
+  created_at: string;
+  permissions: string[]; // Array de acciones de permiso (strings)
 }

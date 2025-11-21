@@ -1,6 +1,6 @@
 import React, { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine, Shield, AlarmClockPlus, Settings, QrCode, ChevronLeft, CalendarCheck } from 'lucide-react';
+import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine, Shield, AlarmClockPlus, Settings, QrCode, ChevronLeft, CalendarCheck, Key } from 'lucide-react'; // Añadir Key icon
 import { AppContext } from '../App';
 import { useSidebar } from '../src/context/SidebarContext';
 import { usePermissions } from '../src/context/PermissionsContext';
@@ -67,7 +67,8 @@ export const Sidebar: React.FC = () => {
           {can('leave_requests:view') && <SidebarLink to="/admin/leave-requests" icon={<CalendarCheck size={20} />} label="Solicitudes de Ausencia" />}
           {can('reports:view') && <SidebarLink to="/admin/reports" icon={<FileBarChart size={20} />} label="Reportes" />}
           {can('overtime:view') && <SidebarLink to="/admin/overtime" icon={<AlarmClockPlus size={20} />} label="Horas Extra" />}
-          {can('users:view') && <SidebarLink to="/admin/users" icon={<Shield size={20} />} label="Usuarios y Roles" />}
+          {can('users:view') && <SidebarLink to="/admin/users" icon={<Shield size={20} />} label="Usuarios del Sistema" />}
+          {can('roles_permissions:manage') && <SidebarLink to="/admin/roles-permissions" icon={<Key size={20} />} label="Roles y Permisos" />} {/* Nuevo enlace */}
           
           <div className="!my-4 border-t border-slate-800"></div>
           <SidebarLink to="/" target="_blank" icon={<QrCode size={20} />} label="Terminal de Acceso" />

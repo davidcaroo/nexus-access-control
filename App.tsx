@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { User, Employee, AttendanceRecord, AuthState, LeaveRequest, ManagedUser } from './types';
+import { User, Employee, AttendanceRecord, AuthState, LeaveRequest, ManagedUser, Role, Permission } from './types'; // Importar Role y Permission
 import { Layout } from './components/Layout';
 import { supabase } from './src/integrations/supabase/client';
 import { ToastProvider } from './src/components/ToastProvider';
@@ -21,6 +21,7 @@ import OvertimeReport from './pages/OvertimeReport';
 import Settings from './src/pages/Settings';
 import PublicLeaveRequest from './src/pages/PublicLeaveRequest';
 import LeaveRequestsManagement from './src/pages/LeaveRequestsManagement';
+import RolePermissionManagement from './src/pages/RolePermissionManagement'; // Importar la nueva página
 
 // Context for global state
 export const AppContext = React.createContext<{
@@ -108,7 +109,7 @@ const App: React.FC = () => {
       }
 
       const roleName = (profile?.roles as { name: string } | null)?.name;
-      if (profile && roleName && (roleName === 'admin' || roleName === 'superadmin')) {
+      if (profile && roleName && (roleName === 'admin' || roleName === 'superadmin' || roleName === 'hr_manager' || roleName === 'department_head')) { // Incluir nuevos roles
         const user: User = {
           id: session.user.id,
           email: session.user.email,
@@ -119,7 +120,7 @@ const App: React.FC = () => {
         setAuthState({ isAuthenticated: true, user });
         console.log("User refreshed and authenticated:", user.full_name);
       } else {
-        console.log("User role not admin/superadmin or profile/role missing during refresh. Signing out.");
+        console.log("User role not authorized or profile/role missing during refresh. Signing out.");
         await supabase.auth.signOut();
         setAuthState({ isAuthenticated: false, user: null });
       }
@@ -162,8 +163,8 @@ const App: React.FC = () => {
           console.log("Profile data:", profile);
 
           const roleName = (profile?.roles as { name: string } | null)?.name;
-          if (profile && roleName && (roleName === 'admin' || roleName === 'superadmin')) {
-            console.log("User is admin/superadmin.");
+          if (profile && roleName && (roleName === 'admin' || roleName === 'superadmin' || roleName === 'hr_manager' || roleName === 'department_head')) { // Incluir nuevos roles
+            console.log("User is authorized role.");
             const user: User = {
               id: session.user.id,
               email: session.user.email,
@@ -173,7 +174,7 @@ const App: React.FC = () => {
             };
             setAuthState({ isAuthenticated: true, user });
           } else {
-            console.log("User role not admin/superadmin or profile/role missing. Signing out.");
+            console.log("User role not authorized or profile/role missing. Signing out.");
             await supabase.auth.signOut();
             setAuthState({ isAuthenticated: false, user: null });
           }
@@ -206,12 +207,17 @@ const App: React.FC = () => {
       fetchUsers(); // Para la lista de usuarios en UserManagement
     }).subscribe();
     const leaveRequestsChannel = supabase.channel('public:leave_requests').on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => fetchLeaveRequests()).subscribe();
+    const rolesChannel = supabase.channel('public:roles').on('postgres_changes', { event: '*', schema: 'public', table: 'roles' }, () => refreshUser()).subscribe(); // Refresh user if roles change
+    const rolePermissionsChannel = supabase.channel('public:role_permissions').on('postgres_changes', { event: '*', schema: 'public', table: 'role_permissions' }, () => refreshUser()).subscribe(); // Refresh user if role permissions change
+
 
     return () => {
       supabase.removeChannel(recordsChannel);
       supabase.removeChannel(employeesChannel);
       supabase.removeChannel(profilesChannel);
       supabase.removeChannel(leaveRequestsChannel);
+      supabase.removeChannel(rolesChannel);
+      supabase.removeChannel(rolePermissionsChannel);
     };
   }, [authState.isAuthenticated, fetchRecords, fetchEmployees, refreshUser, authState.user?.id, fetchLeaveRequests, fetchUsers]);
 
@@ -285,6 +291,9 @@ const AppRoutes = () => {
         </Route>
         <Route element={<ProtectedRoute permission="users:view" />}>
           <Route path="users" element={<UserManagement />} />
+        </Route>
+        <Route element={<ProtectedRoute permission="roles_permissions:manage" />}> {/* Nueva ruta protegida */}
+          <Route path="roles-permissions" element={<RolePermissionManagement />} />
         </Route>
         <Route element={<ProtectedRoute permission="settings:view" />}>
           <Route path="settings" element={<Settings />} />
