@@ -11,17 +11,14 @@ const qrcodeRegionId = "qr-code-full-region";
 
 export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailure }) => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  
-  // Usamos refs para las props para evitar que el useEffect se vuelva a ejecutar
   const onScanSuccessRef = useRef(onScanSuccess);
   onScanSuccessRef.current = onScanSuccess;
   const onScanFailureRef = useRef(onScanFailure);
   onScanFailureRef.current = onScanFailure;
 
   useEffect(() => {
-    // verbose: false desactiva los logs de la librería en la consola
-    scannerRef.current = new Html5Qrcode(qrcodeRegionId, { verbose: false });
-    const html5Qrcode = scannerRef.current;
+    const html5Qrcode = new Html5Qrcode(qrcodeRegionId, { verbose: false });
+    scannerRef.current = html5Qrcode;
 
     const startScanner = () => {
       html5Qrcode.start(
@@ -32,8 +29,17 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailu
           aspectRatio: 1.0,
         },
         (decodedText, _decodedResult) => {
-          // No detener el escáner aquí, el componente padre lo desmontará
-          onScanSuccessRef.current(decodedText);
+          // PRIMERO, detener el escáner para liberar la cámara.
+          if (html5Qrcode.isScanning) {
+            html5Qrcode.stop().then(() => {
+              // LUEGO, notificar al componente padre.
+              onScanSuccessRef.current(decodedText);
+            }).catch(err => {
+              console.error("Error al detener el escáner después del éxito.", err);
+              // Aún así, notificar al padre para que la app no se bloquee.
+              onScanSuccessRef.current(decodedText);
+            });
+          }
         },
         (errorMessage) => {
           // Ignorar errores de "QR no encontrado"
@@ -47,14 +53,15 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailu
 
     startScanner();
 
-    // La función de limpieza se ejecuta cuando el componente se desmonta
+    // Función de limpieza como respaldo (si el componente se desmonta por navegación, etc.)
     return () => {
-      // Usamos clear() que detiene el escaneo y limpia los recursos
-      html5Qrcode.clear().catch(error => {
-        console.error("Fallo al limpiar html5Qrcode.", error);
-      });
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.stop().catch(error => {
+          console.error("Fallo al detener el escáner en la limpieza.", error);
+        });
+      }
     };
-  }, []); // El array vacío asegura que se ejecute solo al montar y desmontar
+  }, []);
 
   return (
     <div className="relative w-full max-w-md mx-auto aspect-square rounded-2xl overflow-hidden border-2 border-slate-700 bg-black">
