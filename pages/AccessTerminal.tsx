@@ -14,7 +14,7 @@ const AccessTerminal: React.FC = () => {
   const [cedulaInput, setCedulaInput] = useState('');
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string, employee?: Employee }>({ type: 'idle', message: '' });
   const [isProcessing, setIsProcessing] = useState(false);
-  const [scannerError, setScannerError] = useState<string | null>(null);
+  const [scannerError, setScannerError] = useState<string | null>(null); // Estado para errores específicos del escáner
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -53,16 +53,13 @@ const AccessTerminal: React.FC = () => {
   
   const handleScanSuccess = useCallback(async (cedula: string) => {
     if (isProcessing) return;
+    setScannerError(null); // Limpiar error de escáner al escanear con éxito
     await processAccess(cedula, 'qr');
   }, [processAccess, isProcessing]);
 
-  const handleScanFailure = useCallback((error: string) => {
+  const handleScanFailure = useCallback((error: string | null) => {
     console.error(`QR Scanner Error: ${error}`);
-    if (error.toLowerCase().includes('permission')) {
-      setScannerError('Permiso de cámara denegado. Por favor, habilítelo en su navegador.');
-    } else {
-      setScannerError('No se pudo iniciar la cámara. Verifique los permisos y que no esté en uso.');
-    }
+    setScannerError(error); // Establecer el mensaje de error directamente
   }, []);
 
   return (

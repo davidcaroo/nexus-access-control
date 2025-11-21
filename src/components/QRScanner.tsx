@@ -4,7 +4,7 @@ import { Camera } from 'lucide-react';
 
 interface QRScannerProps {
   onScanSuccess: (decodedText: string) => void;
-  onScanFailure?: (error: string) => void;
+  onScanFailure?: (error: string | null) => void; // Permite null para limpiar el error
   scanCooldown?: number; // Nueva prop para la duración del enfriamiento en ms
 }
 
@@ -22,6 +22,9 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailu
   const isScanningPausedRef = useRef(isScanningPaused);
   isScanningPausedRef.current = isScanningPaused;
 
+  const [availableCameras, setAvailableCameras] = useState<Array<{ id: string; label: string }>>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
+
   const handleScan = useCallback((decodedText: string) => {
     if (isScanningPausedRef.current) {
       return;
@@ -35,25 +38,61 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailu
     }, scanCooldown);
   }, [scanCooldown]);
 
-  // Efecto para inicializar la instancia de Html5Qrcode una vez al montar
+  // Efecto para inicializar la instancia de Html5Qrcode y listar cámaras una vez
   useEffect(() => {
-    if (!html5QrcodeScannerRef.current) {
-      html5QrcodeScannerRef.current = new Html5Qrcode(qrcodeRegionId, { verbose: false });
-    }
-    // No se necesita limpieza aquí, ya que el ciclo de vida del escáner se gestiona en el siguiente efecto
+    const initScanner = async () => {
+      if (!html5QrcodeScannerRef.current) {
+        html5QrcodeScannerRef.current = new Html5Qrcode(qrcodeRegionId, { verbose: false });
+      }
+      const html5Qrcode = html5QrcodeScannerRef.current;
+
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length) {
+          setAvailableCameras(devices.map(device => ({ id: device.id, label: device.label })));
+          // Preferir la cámara de entorno (trasera) si está disponible, de lo contrario, la primera
+          const environmentCamera = devices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('environment'));
+          setSelectedCameraId(environmentCamera ? environmentCamera.id : devices[0].id);
+          if (onScanFailureRef.current) {
+            onScanFailureRef.current(null); // Limpiar cualquier error previo si se encuentran cámaras
+          }
+        } else {
+          const msg = 'No se encontraron cámaras disponibles en este dispositivo.';
+          if (onScanFailureRef.current) {
+            onScanFailureRef.current(msg);
+          }
+        }
+      } catch (err) {
+        const errorMessage = String(err);
+        let displayMessage = 'Error al acceder a las cámaras. Verifique que no estén en uso.';
+        if (errorMessage.toLowerCase().includes('permission')) {
+          displayMessage = 'Permiso de cámara denegado. Por favor, habilítelo en su navegador.';
+        }
+        if (onScanFailureRef.current) {
+          onScanFailureRef.current(displayMessage);
+        }
+      }
+    };
+
+    initScanner();
   }, []); // Array de dependencias vacío asegura que esto se ejecute solo una vez
 
-  // Efecto para iniciar y detener el escáner
+  // Efecto para iniciar y detener el escáner basado en selectedCameraId
   useEffect(() => {
     const html5Qrcode = html5QrcodeScannerRef.current;
-    if (!html5Qrcode) return; // No debería ocurrir si el primer efecto se ejecutó
+    if (!html5Qrcode || !selectedCameraId) {
+      // Si no hay cámara seleccionada y no hay cámaras disponibles, notificar al padre
+      if (!selectedCameraId && availableCameras.length === 0 && onScanFailureRef.current) {
+        onScanFailureRef.current('No se encontraron cámaras disponibles en este dispositivo.');
+      }
+      return;
+    }
 
-    const startScanner = async () => {
-      // Asegurarse de que el escáner no esté ya en ejecución antes de iniciarlo
+    const startScanning = async () => {
       if (!html5Qrcode.isScanning) {
         try {
           await html5Qrcode.start(
-            { facingMode: "environment" },
+            selectedCameraId, // Usar el ID de la cámara seleccionada
             {
               fps: 10,
               qrbox: { width: 250, height: 250 },
@@ -64,15 +103,24 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailu
               // Ignorar errores de "QR no encontrado"
             }
           );
-        } catch (err) {
+          // Si el inicio es exitoso, limpiar cualquier error previo
           if (onScanFailureRef.current) {
-            onScanFailureRef.current(String(err));
+            onScanFailureRef.current(null);
+          }
+        } catch (err) {
+          const errorMessage = String(err);
+          let displayMessage = 'No se pudo iniciar la cámara. Verifique los permisos y que no esté en uso.';
+          if (errorMessage.toLowerCase().includes('permission')) {
+            displayMessage = 'Permiso de cámara denegado. Por favor, habilítelo en su navegador.';
+          }
+          if (onScanFailureRef.current) {
+            onScanFailureRef.current(displayMessage);
           }
         }
       }
     };
 
-    startScanner();
+    startScanning();
 
     return () => {
       // Detener el escáner cuando el componente se desmonta o las dependencias cambian
@@ -82,7 +130,7 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailu
         });
       }
     };
-  }, [handleScan]); // Dependencias: handleScan (porque es el callback para el escáner)
+  }, [selectedCameraId, handleScan, availableCameras.length]); // Reiniciar si la cámara seleccionada o el número de cámaras cambia
 
   return (
     <div className="relative w-full max-w-md mx-auto aspect-square rounded-2xl overflow-hidden border-2 border-slate-700 bg-black">
