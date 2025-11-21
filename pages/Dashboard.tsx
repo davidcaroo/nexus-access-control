@@ -72,7 +72,7 @@ const Dashboard: React.FC = () => {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2" title="Estado Actual del Personal">
-          <div className="h-72 w-full flex flex-col items-center justify-center relative">
+          <div className="h-72 w-full flex flex-col items-center justify-center relative min-w-0 min-h-0"> {/* Added min-w-0 min-h-0 */}
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={onSiteChartData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
