@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
-import { QrCode, User as UserIcon, LogIn, LogOut, AlertCircle, Shield, CameraOff } from 'lucide-react';
+import { QrCode, User as UserIcon, LogIn, LogOut, AlertCircle, Shield, CameraOff, Play } from 'lucide-react'; // Added Play icon
 import { Link } from 'react-router-dom';
 import { AppContext } from '../App';
 import { Button, Card } from '../components/UIComponents';
@@ -14,8 +14,9 @@ const AccessTerminal: React.FC = () => {
   const [cedulaInput, setCedulaInput] = useState('');
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string, employee?: Employee }>({ type: 'idle', message: '' });
   const [isProcessing, setIsProcessing] = useState(false);
-  const [scannerError, setScannerError] = useState<string | null>(null); // Estado para errores específicos del escáner
-  const [displayedScannerError, setDisplayedScannerError] = useState<string | null>(null); // Estado para el error con debounce
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const [displayedScannerError, setDisplayedScannerError] = useState<string | null>(null);
+  const [isScannerActive, setIsScannerActive] = useState(false); // New state for scanner activation
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -29,11 +30,10 @@ const AccessTerminal: React.FC = () => {
     }
   }, [status]);
 
-  // Efecto para debouncar el error del escáner
   useEffect(() => {
     const handler = setTimeout(() => {
       setDisplayedScannerError(scannerError);
-    }, 500); // Muestra el error solo si persiste por 500ms
+    }, 500);
 
     return () => {
       clearTimeout(handler);
@@ -60,19 +60,38 @@ const AccessTerminal: React.FC = () => {
     } finally {
       setIsProcessing(false);
       setCedulaInput('');
+      // If scan mode, deactivate scanner after processing
+      if (metodo === 'qr') {
+        setIsScannerActive(false); 
+      }
     }
   }, [addRecord, isProcessing]);
   
   const handleScanSuccess = useCallback(async (cedula: string) => {
     if (isProcessing) return;
-    setScannerError(null); // Limpiar error de escáner al escanear con éxito
+    setScannerError(null);
     await processAccess(cedula, 'qr');
   }, [processAccess, isProcessing]);
 
   const handleScanFailure = useCallback((error: string | null) => {
     console.error(`QR Scanner Error: ${error}`);
-    setScannerError(error); // Establecer el mensaje de error directamente
+    setScannerError(error);
   }, []);
+
+  const handleToggleScanner = () => {
+    setIsScannerActive(prev => !prev);
+    setScannerError(null); // Clear error when toggling scanner
+    setDisplayedScannerError(null); // Clear debounced error too
+  };
+
+  // When switching modes, ensure scanner is off if going to manual, or ready to be activated if going to scan
+  useEffect(() => {
+    if (mode === 'manual') {
+      setIsScannerActive(false);
+      setScannerError(null);
+      setDisplayedScannerError(null);
+    }
+  }, [mode]);
 
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col relative overflow-hidden">
@@ -103,7 +122,14 @@ const AccessTerminal: React.FC = () => {
       <main className="flex-1 relative z-10 flex items-center justify-center p-4 sm:p-6">
         <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-8">
-            <div className="bg-slate-800/50 p-2 rounded-2xl border border-white/10 flex"><button onClick={() => setMode('scan')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 ${mode === 'scan' ? 'bg-blue-600' : 'text-slate-400'}`}><QrCode size={18} /> Escáner QR</button><button onClick={() => setMode('manual')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 ${mode === 'manual' ? 'bg-blue-600' : 'text-slate-400'}`}><UserIcon size={18} /> Teclado</button></div>
+            <div className="bg-slate-800/50 p-2 rounded-2xl border border-white/10 flex">
+              <button onClick={() => setMode('scan')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 ${mode === 'scan' ? 'bg-blue-600' : 'text-slate-400'}`}>
+                <QrCode size={18} /> Escáner QR
+              </button>
+              <button onClick={() => setMode('manual')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 ${mode === 'manual' ? 'bg-blue-600' : 'text-slate-400'}`}>
+                <UserIcon size={18} /> Teclado
+              </button>
+            </div>
             <Card className="bg-slate-800 border-slate-700 text-slate-100 min-h-[400px] flex flex-col justify-center relative overflow-hidden">
               {
                 status.type === 'success' && status.employee ? (() => {
@@ -132,14 +158,26 @@ const AccessTerminal: React.FC = () => {
                   </div>
                 ) : mode === 'scan' ? (
                   <div className="p-4">
-                    {displayedScannerError ? ( // Usar displayedScannerError aquí
+                    {displayedScannerError && isScannerActive ? ( // Only show error if scanner is active
                       <div className="text-center text-red-400 bg-red-900/50 p-6 rounded-lg">
                         <CameraOff size={48} className="mx-auto mb-4" />
                         <h3 className="font-bold mb-2">Error de Cámara</h3>
                         <p className="text-sm">{displayedScannerError}</p>
+                        <Button onClick={handleToggleScanner} className="mt-4 bg-blue-600 hover:bg-blue-700">
+                          <Play size={18} className="mr-2" /> Reintentar Escáner
+                        </Button>
                       </div>
                     ) : (
-                      <QRScanner onScanSuccess={handleScanSuccess} onScanFailure={handleScanFailure} />
+                      <>
+                        <QRScanner onScanSuccess={handleScanSuccess} onScanFailure={handleScanFailure} isActive={isScannerActive} />
+                        {!isScannerActive && (
+                          <div className="text-center mt-6">
+                            <Button onClick={handleToggleScanner} className="bg-blue-600 hover:bg-blue-700">
+                              <Play size={18} className="mr-2" /> Iniciar Escaneo
+                            </Button>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 ) : (
