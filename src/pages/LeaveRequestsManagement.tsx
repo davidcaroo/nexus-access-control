@@ -38,6 +38,16 @@ const LeaveRequestsManagement: React.FC = () => {
     return employee ? employee.cedula : 'N/A';
   };
 
+  // Función para traducir el tipo de solicitud
+  const translateRequestType = (type: LeaveRequest['request_type']) => {
+    switch (type) {
+      case 'vacation': return 'Vacaciones';
+      case 'sick_leave': return 'Baja por Enfermedad';
+      case 'day_off': return 'Día Libre';
+      default: return type;
+    }
+  };
+
   const handleAction = (request: LeaveRequest, type: 'approve' | 'reject') => {
     setSelectedRequest(request);
     setActionType(type);
@@ -159,7 +169,7 @@ const LeaveRequestsManagement: React.FC = () => {
                       <div className="font-medium">{getEmployeeName(req.employee_id)}</div>
                       <div className="text-xs text-gray-500 font-mono">{getEmployeeCedula(req.employee_id)}</div>
                     </td>
-                    <td className="px-6 py-4 capitalize">{req.request_type.replace('_', ' ')}</td>
+                    <td className="px-6 py-4 capitalize">{translateRequestType(req.request_type)}</td> {/* Usar la función de traducción */}
                     <td className="px-6 py-4 text-gray-600">
                       {req.start_date} <span className="text-gray-400">a</span> {req.end_date}
                     </td>
@@ -215,7 +225,7 @@ const LeaveRequestsManagement: React.FC = () => {
         title={actionType === 'approve' ? 'Aprobar Solicitud' : 'Rechazar Solicitud'}
         message={
           actionType === 'approve'
-            ? `¿Está seguro de que desea aprobar la solicitud de ${getEmployeeName(selectedRequest?.employee_id || '')} para ${selectedRequest?.request_type.replace('_', ' ')} del ${selectedRequest?.start_date} al ${selectedRequest?.end_date}?`
+            ? `¿Está seguro de que desea aprobar la solicitud de ${getEmployeeName(selectedRequest?.employee_id || '')} para ${translateRequestType(selectedRequest?.request_type || 'day_off')} del ${selectedRequest?.start_date} al ${selectedRequest?.end_date}?`
             : (
                 <div>
                   <p className="mb-4">¿Está seguro de que desea rechazar la solicitud de {getEmployeeName(selectedRequest?.employee_id || '')}?</p>
