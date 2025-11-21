@@ -10,20 +10,20 @@ interface QRScannerProps {
 
 const qrcodeRegionId = "qr-code-full-region";
 
-export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailure, scanCooldown = 3000 }) => { // Por defecto 3 segundos
-  const html5QrcodeRef = useRef<Html5Qrcode | null>(null);
+export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailure, scanCooldown = 3000 }) => {
+  const html5QrcodeScannerRef = useRef<Html5Qrcode | null>(null); // Ref para la instancia del escáner
+
   const onScanSuccessRef = useRef(onScanSuccess);
   onScanSuccessRef.current = onScanSuccess;
   const onScanFailureRef = useRef(onScanFailure);
   onScanFailureRef.current = onScanFailure;
 
   const [isScanningPaused, setIsScanningPaused] = useState(false);
-  const isScanningPausedRef = useRef(isScanningPaused); // Ref para mantener el estado más reciente
-  isScanningPausedRef.current = isScanningPaused; // Mantener el ref actualizado
+  const isScanningPausedRef = useRef(isScanningPaused);
+  isScanningPausedRef.current = isScanningPaused;
 
-  // Memoizar el manejador de escaneo para evitar recrearlo en cada render
   const handleScan = useCallback((decodedText: string) => {
-    if (isScanningPausedRef.current) { // Verificar el estado más reciente a través del ref
+    if (isScanningPausedRef.current) {
       return;
     }
 
@@ -33,44 +33,56 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailu
     setTimeout(() => {
       setIsScanningPaused(false);
     }, scanCooldown);
-  }, [scanCooldown]); // Solo recrear si scanCooldown cambia
+  }, [scanCooldown]);
 
+  // Efecto para inicializar la instancia de Html5Qrcode una vez al montar
   useEffect(() => {
-    if (!html5QrcodeRef.current) { // Inicializar el escáner solo una vez
-      html5QrcodeRef.current = new Html5Qrcode(qrcodeRegionId, { verbose: false });
+    if (!html5QrcodeScannerRef.current) {
+      html5QrcodeScannerRef.current = new Html5Qrcode(qrcodeRegionId, { verbose: false });
     }
-    const html5Qrcode = html5QrcodeRef.current;
+    // No se necesita limpieza aquí, ya que el ciclo de vida del escáner se gestiona en el siguiente efecto
+  }, []); // Array de dependencias vacío asegura que esto se ejecute solo una vez
 
-    const startScanner = () => {
-      html5Qrcode.start(
-        { facingMode: "environment" },
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0,
-        },
-        handleScan, // Usar el manejador memoizado
-        (errorMessage) => {
-          // Ignorar errores de "QR no encontrado"
+  // Efecto para iniciar y detener el escáner
+  useEffect(() => {
+    const html5Qrcode = html5QrcodeScannerRef.current;
+    if (!html5Qrcode) return; // No debería ocurrir si el primer efecto se ejecutó
+
+    const startScanner = async () => {
+      // Asegurarse de que el escáner no esté ya en ejecución antes de iniciarlo
+      if (!html5Qrcode.isScanning) {
+        try {
+          await html5Qrcode.start(
+            { facingMode: "environment" },
+            {
+              fps: 10,
+              qrbox: { width: 250, height: 250 },
+              aspectRatio: 1.0,
+            },
+            handleScan,
+            (errorMessage) => {
+              // Ignorar errores de "QR no encontrado"
+            }
+          );
+        } catch (err) {
+          if (onScanFailureRef.current) {
+            onScanFailureRef.current(String(err));
+          }
         }
-      ).catch(err => {
-        if (onScanFailureRef.current) {
-          onScanFailureRef.current(String(err));
-        }
-      });
+      }
     };
 
     startScanner();
 
-    // Función de limpieza para detener el escáner cuando el componente se desmonta
     return () => {
+      // Detener el escáner cuando el componente se desmonta o las dependencias cambian
       if (html5Qrcode.isScanning) {
         html5Qrcode.stop().catch(error => {
           console.error("Fallo al detener el escáner en la limpieza.", error);
         });
       }
     };
-  }, [handleScan]); // Dependencia en handleScan
+  }, [handleScan]); // Dependencias: handleScan (porque es el callback para el escáner)
 
   return (
     <div className="relative w-full max-w-md mx-auto aspect-square rounded-2xl overflow-hidden border-2 border-slate-700 bg-black">
