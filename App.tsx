@@ -19,6 +19,7 @@ import Reports from './pages/Reports';
 import UserManagement from './src/pages/UserManagement';
 import OvertimeReport from './pages/OvertimeReport';
 import Settings from './src/pages/Settings';
+import PublicLeaveRequest from './src/pages/PublicLeaveRequest'; // Importar la nueva página
 
 // Context for global state
 export const AppContext = React.createContext<{
@@ -38,7 +39,7 @@ export const AppContext = React.createContext<{
 const App: React.FC = () => {
   const [authState, setAuthState] = useState<AuthState>({ isAuthenticated: false, user: null });
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [records, setRecords] = useState<AttendanceRecord[]>(([]);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
 
   const fetchEmployees = useCallback(async () => {
@@ -218,6 +219,7 @@ const AppRoutes = () => {
     <Routes>
       <Route path="/" element={<AccessTerminal />} />
       <Route path="/login" element={!authState.isAuthenticated ? <Login /> : <Navigate to="/admin/dashboard" />} />
+      <Route path="/request-leave" element={<PublicLeaveRequest />} /> {/* Nueva ruta pública */}
       <Route path="/admin" element={authState.isAuthenticated ? <SidebarProvider><PermissionsProvider><Layout /></PermissionsProvider></SidebarProvider> : <Navigate to="/login" />}>
         <Route element={<ProtectedRoute permission="dashboard:view" />}>
           <Route path="dashboard" element={<Dashboard />} />
