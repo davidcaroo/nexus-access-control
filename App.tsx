@@ -94,26 +94,27 @@ const App: React.FC = () => {
   }, [authState.isAuthenticated, authState.user?.role]); // Dependencias para estabilidad
 
   const refreshUser = useCallback(async () => {
-    console.log("refreshUser: Refreshing user session...");
+    console.log("Auth Flow (refreshUser): Refreshing user session...");
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     if (sessionError) {
-      console.error("refreshUser: Error getting session during refresh:", sessionError);
+      console.error("Auth Flow (refreshUser): Error getting session during refresh:", sessionError);
       setAuthState({ isAuthenticated: false, user: null });
       return;
     }
 
     if (session?.user) {
-      console.log("refreshUser: Session user found, fetching profile for user:", session.user.id);
+      console.log("Auth Flow (refreshUser): Session user found. User ID:", session.user.id);
       const { data: profile, error: profileError } = await supabase.from('profiles').select('*, roles(name)').eq('id', session.user.id).single();
       
       if (profileError) {
-        console.error("refreshUser: Error fetching profile during refresh:", profileError);
+        console.error("Auth Flow (refreshUser): Error fetching profile during refresh:", profileError);
         setAuthState({ isAuthenticated: false, user: null });
         return;
       }
+      console.log("Auth Flow (refreshUser): Fetched profile data:", profile);
 
       const roleName = (profile?.roles as { name: string } | null)?.name;
-      console.log("refreshUser: Fetched profile roleName:", roleName);
+      console.log("Auth Flow (refreshUser): Extracted role name:", roleName);
 
       if (profile && roleName && (roleName === 'admin' || roleName === 'superadmin' || roleName === 'hr_manager' || roleName === 'department_head')) { // Incluir nuevos roles
         const user: User = {
@@ -124,14 +125,14 @@ const App: React.FC = () => {
           avatar_url: profile.avatar_url,
         };
         setAuthState({ isAuthenticated: true, user });
-        console.log("refreshUser: User refreshed and authenticated:", user.full_name, "Role:", user.role);
+        console.log("Auth Flow (refreshUser): AuthState updated to authenticated. User:", user.full_name, "Role:", user.role);
       } else {
-        console.log("refreshUser: User role not authorized or profile/role missing during refresh. Signing out.");
+        console.warn("Auth Flow (refreshUser): User role not authorized or profile/role missing. Role:", roleName, "Profile exists:", !!profile);
         await supabase.auth.signOut();
         setAuthState({ isAuthenticated: false, user: null });
       }
     } else {
-      console.log("refreshUser: No session user found during refresh.");
+      console.log("Auth Flow (refreshUser): No session user found during refresh.");
       setAuthState({ isAuthenticated: false, user: null });
     }
   }, []);
@@ -141,7 +142,7 @@ const App: React.FC = () => {
     const loadAppData = async () => {
       if (authState.isAuthenticated) {
         setIsAppDataLoading(true);
-        console.log("loadAppData: User authenticated, fetching app data...");
+        console.log("App Data Load: User authenticated, fetching app data...");
         await Promise.all([
           fetchEmployees(),
           fetchRecords(),
@@ -149,34 +150,34 @@ const App: React.FC = () => {
           fetchUsers() // Incluir la carga de usuarios aquí
         ]);
         setIsAppDataLoading(false);
-        console.log("loadAppData: App data fetched.");
+        console.log("App Data Load: App data fetched.");
       } else {
-        console.log("loadAppData: User not authenticated, skipping app data fetch.");
+        console.log("App Data Load: User not authenticated, skipping app data fetch.");
       }
     };
     loadAppData();
   }, [authState.isAuthenticated, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers]);
 
   useEffect(() => {
-    console.log("onAuthStateChange: Setting up listener...");
+    console.log("Auth Flow (onAuthStateChange): Setting up listener...");
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("onAuthStateChange: Event:", event, "Session:", session);
+      console.log("Auth Flow (onAuthStateChange): Event:", event, "Session:", session);
       try {
         if (session) {
-          console.log("onAuthStateChange: Session found, fetching profile for user:", session.user.id);
+          console.log("Auth Flow (onAuthStateChange): Session found. User ID:", session.user.id);
           const { data: profile, error: profileError } = await supabase.from('profiles').select('*, roles(name)').eq('id', session.user.id).single();
           
           if (profileError) {
-            console.error("onAuthStateChange: Error fetching profile:", profileError);
+            console.error("Auth Flow (onAuthStateChange): Error fetching profile:", profileError);
             throw profileError;
           }
-          console.log("onAuthStateChange: Profile data:", profile);
+          console.log("Auth Flow (onAuthStateChange): Fetched profile data:", profile);
 
           const roleName = (profile?.roles as { name: string } | null)?.name;
-          console.log("onAuthStateChange: Fetched profile roleName:", roleName);
+          console.log("Auth Flow (onAuthStateChange): Extracted role name:", roleName);
 
           if (profile && roleName && (roleName === 'admin' || roleName === 'superadmin' || roleName === 'hr_manager' || roleName === 'department_head')) { // Incluir nuevos roles
-            console.log("onAuthStateChange: User is authorized role.");
+            console.log("Auth Flow (onAuthStateChange): User has an authorized role.");
             const user: User = {
               id: session.user.id,
               email: session.user.email,
@@ -185,27 +186,27 @@ const App: React.FC = () => {
               avatar_url: profile.avatar_url,
             };
             setAuthState({ isAuthenticated: true, user });
-            console.log("onAuthStateChange: AuthState updated to authenticated. User:", user.full_name, "Role:", user.role);
+            console.log("Auth Flow (onAuthStateChange): AuthState updated to authenticated. User:", user.full_name, "Role:", user.role);
           } else {
-            console.log("onAuthStateChange: User role not authorized or profile/role missing. Signing out.");
+            console.warn("Auth Flow (onAuthStateChange): User role not authorized or profile/role missing. Role:", roleName, "Profile exists:", !!profile);
             await supabase.auth.signOut();
             setAuthState({ isAuthenticated: false, user: null });
           }
         } else {
-          console.log("onAuthStateChange: No session found.");
+          console.log("Auth Flow (onAuthStateChange): No session found.");
           setAuthState({ isAuthenticated: false, user: null });
         }
       } catch (error) {
-        console.error("onAuthStateChange: Error handling auth state change:", error);
+        console.error("Auth Flow (onAuthStateChange): Error handling auth state change:", error);
         setAuthState({ isAuthenticated: false, user: null });
       } finally {
-        console.log("onAuthStateChange: Setting isSessionLoading to false.");
+        console.log("Auth Flow (onAuthStateChange): Setting isSessionLoading to false.");
         setIsSessionLoading(false);
       }
     });
 
     return () => {
-      console.log("onAuthStateChange: Unsubscribing from listener.");
+      console.log("Auth Flow (onAuthStateChange): Unsubscribing from listener.");
       subscription.unsubscribe();
     };
   }, []);
