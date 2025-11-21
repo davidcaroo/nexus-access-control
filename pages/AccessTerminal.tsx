@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { QrCode, User as UserIcon, LogIn, LogOut, AlertCircle, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AppContext } from '../App';
@@ -16,6 +16,7 @@ const AccessTerminal: React.FC = () => {
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string, employee?: Employee }>({ type: 'idle', message: '' });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const isProcessingRef = useRef(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -29,9 +30,12 @@ const AccessTerminal: React.FC = () => {
     }
   }, [status]);
 
-  const processAccess = async (cedula: string, tipo: 'entrada' | 'salida', metodo: 'manual' | 'qr') => {
-    if (!cedula || isProcessing) return;
+  const processAccess = useCallback(async (cedula: string, tipo: 'entrada' | 'salida', metodo: 'manual' | 'qr') => {
+    if (!cedula || isProcessingRef.current) return;
+    
+    isProcessingRef.current = true;
     setIsProcessing(true);
+
     try {
       const result = await addRecord(cedula, tipo, metodo);
       if (result.success) {
@@ -46,29 +50,33 @@ const AccessTerminal: React.FC = () => {
       setStatus({ type: 'error', message: 'Ocurrió un error inesperado.' });
       toast.error('Ocurrió un error inesperado.');
     } finally {
+      isProcessingRef.current = false;
       setIsProcessing(false);
       setCedulaInput('');
     }
-  };
+  }, [addRecord]);
   
-  const handleScan = async (scannedCedula: string) => {
-    const { data: employee, error } = await supabase.from('employees').select('id').eq('cedula', scannedCedula).single();
-    if (error || !employee) {
-      setStatus({ type: 'error', message: 'Empleado no encontrado' });
-      toast.error('Empleado no encontrado');
-      setIsScannerOpen(false); // Close on error
-      return;
-    }
+  const handleScan = useCallback((scannedCedula: string) => {
+    setIsScannerOpen(false);
 
-    const lastRecord = records
-      .filter(r => r.employee_id === employee.id)
-      .sort((a, b) => new Date(`${b.fecha}T${b.hora}`).getTime() - new Date(`${a.fecha}T${a.hora}`).getTime())[0];
+    // Fire-and-forget the async logic to not block the scanner callback
+    (async () => {
+      const { data: employee, error } = await supabase.from('employees').select('id').eq('cedula', scannedCedula).single();
+      if (error || !employee) {
+        setStatus({ type: 'error', message: 'Empleado no encontrado' });
+        toast.error('Empleado no encontrado');
+        return;
+      }
+
+      const lastRecord = records
+        .filter(r => r.employee_id === employee.id)
+        .sort((a, b) => new Date(`${b.fecha}T${b.hora}`).getTime() - new Date(`${a.fecha}T${a.hora}`).getTime())[0];
+        
+      const type = !lastRecord || lastRecord.tipo === 'salida' ? 'entrada' : 'salida';
       
-    const type = !lastRecord || lastRecord.tipo === 'salida' ? 'entrada' : 'salida';
-    
-    await processAccess(scannedCedula, type, 'qr');
-    setIsScannerOpen(false); // Close after processing is complete
-  };
+      await processAccess(scannedCedula, type, 'qr');
+    })();
+  }, [records, processAccess]);
 
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col relative overflow-hidden">
