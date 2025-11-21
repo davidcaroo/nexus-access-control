@@ -60,8 +60,11 @@ const EmployeeManager: React.FC = () => {
 
     try {
       const dataToSave = { ...formData };
-      if (!dataToSave.qr_code_url && dataToSave.cedula) {
-        dataToSave.qr_code_url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${dataToSave.cedula}`;
+      // Siempre generar el QR si la cédula está presente, asegurando que esté actualizado
+      if (dataToSave.cedula) {
+        dataToSave.qr_code_url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(dataToSave.cedula)}`;
+      } else {
+        dataToSave.qr_code_url = undefined; // O null, si la cédula se elimina
       }
 
       const result = isEditing
@@ -72,6 +75,7 @@ const EmployeeManager: React.FC = () => {
         toast.error(`Error al guardar: ${result.error.message}`);
       } else {
         toast.success(isEditing ? 'Empleado actualizado correctamente' : 'Empleado registrado correctamente');
+        await fetchEmployees(); // Forzar la recarga de empleados para actualizar la UI
         handleCloseModal();
       }
     } catch (error) {
