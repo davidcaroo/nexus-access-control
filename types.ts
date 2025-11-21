@@ -32,6 +32,20 @@ export interface AttendanceRecord {
   tardanza: boolean;
 }
 
+export interface LeaveRequest {
+  id: string;
+  employee_id: string;
+  request_type: 'vacation' | 'sick_leave' | 'day_off';
+  start_date: string; // ISO Date string YYYY-MM-DD
+  end_date: string;   // ISO Date string YYYY-MM-DD
+  reason?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requested_at: string; // ISO Timestamp
+  approved_by?: string; // User ID of the approver
+  approved_at?: string; // ISO Timestamp
+  rejection_reason?: string;
+}
+
 export interface AuthState {
   isAuthenticated: boolean;
   user: User | null;
