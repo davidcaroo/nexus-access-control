@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera } from 'lucide-react';
 
@@ -10,12 +10,18 @@ interface QRScannerProps {
 const qrcodeRegionId = "qr-code-full-region";
 
 export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailure }) => {
+  // Usamos refs para mantener las últimas versiones de las funciones callback
+  // sin necesidad de reiniciar el efecto de escaneo.
+  const onScanSuccessRef = useRef(onScanSuccess);
+  onScanSuccessRef.current = onScanSuccess;
+
+  const onScanFailureRef = useRef(onScanFailure);
+  onScanFailureRef.current = onScanFailure;
+
   useEffect(() => {
-    // Creamos una nueva instancia cada vez que el componente se monta.
-    // Esto es más seguro ya que la librería gestiona mucho estado del DOM.
     const html5Qrcode = new Html5Qrcode(qrcodeRegionId);
 
-    const start = async () => {
+    const startScanner = async () => {
       try {
         await html5Qrcode.start(
           { facingMode: "environment" },
@@ -25,34 +31,33 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailu
             aspectRatio: 1.0,
           },
           (decodedText, _decodedResult) => {
-            onScanSuccess(decodedText);
+            // Usamos la ref para llamar siempre a la última función onScanSuccess
+            onScanSuccessRef.current(decodedText);
           },
           (errorMessage) => {
-            // Este callback es para errores de "QR no encontrado", podemos ignorarlo.
+            // Ignoramos los errores comunes de "no se encontró QR" para no saturar la consola.
+            // Si se desea manejar estos errores, se puede llamar a onScanFailureRef.current aquí.
           }
         );
       } catch (err) {
-        if (onScanFailure) {
-          onScanFailure(String(err));
+        // Este error suele ser por falta de permisos o cámara no encontrada.
+        if (onScanFailureRef.current) {
+          onScanFailureRef.current(String(err));
         }
       }
     };
 
-    start();
+    startScanner();
 
-    // La función de limpieza es crucial. Se ejecuta cuando el componente se desmonta.
+    // La función de limpieza es crucial para liberar la cámara.
     return () => {
-      // Es importante comprobar si el escáner está activo antes de detenerlo.
-      // El método stop() es asíncrono y devuelve una promesa.
       if (html5Qrcode.isScanning) {
         html5Qrcode.stop().catch((err) => {
-          console.error("Fallo al detener el escáner QR.", err);
+          console.error("Fallo al detener el escáner QR durante la limpieza.", err);
         });
       }
     };
-    // El array de dependencias asegura que este efecto se ejecute solo cuando los callbacks cambian.
-    // Al memorizarlos en el padre, nos aseguramos de que solo se ejecute al montar y desmontar.
-  }, [onScanSuccess, onScanFailure]);
+  }, []); // El array de dependencias vacío asegura que este efecto se ejecute UNA SOLA VEZ.
 
   return (
     <div className="relative w-full max-w-md mx-auto aspect-square rounded-2xl overflow-hidden border-2 border-slate-700 bg-black">
