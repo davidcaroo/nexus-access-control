@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { supabase } from '../integrations/supabase/client';
-import { ManagedUser, Role } from '../../types'; // Importar ManagedUser
+import { ManagedUser, Role, RoleName } from '../../types'; // Importar ManagedUser y RoleName
 import { Card, Button, Badge, Input } from '../../components/UIComponents';
 import { Plus, Edit, Trash2, X, UserX, UserCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -17,7 +17,7 @@ const UserManagement: React.FC = () => {
     full_name: '',
     email: '',
     password: '',
-    role: 'admin' as Role,
+    role: 'admin' as RoleName, // Usar RoleName
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -29,9 +29,31 @@ const UserManagement: React.FC = () => {
   const [userToBan, setUserToBan] = useState<ManagedUser | null>(null);
   const [isBanning, setIsBanning] = useState(false);
 
-  // No necesitamos un fetchUsers local ni un estado 'loading' para la lista de usuarios,
-  // ya que App.tsx se encarga de la carga inicial y las actualizaciones en tiempo real.
-  // El estado 'isAppDataLoading' del contexto nos indica si los datos están cargando.
+  const [availableRoles, setAvailableRoles] = useState<Role[]>([]); // Nuevo estado para roles disponibles
+  const [isLoadingRoles, setIsLoadingRoles] = useState(true); // Nuevo estado de carga para roles
+
+  // Función para cargar los roles disponibles
+  const fetchAvailableRoles = useCallback(async () => {
+    setIsLoadingRoles(true);
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('manage-roles-permissions/roles', {
+        method: 'GET',
+      });
+      if (invokeError) throw invokeError;
+      if (data?.error) throw new Error(data.error);
+      setAvailableRoles(data);
+    } catch (err: any) {
+      console.error("Error fetching available roles:", err.message);
+      toast.error(err.message || 'Error al cargar los roles disponibles.');
+      setAvailableRoles([]); // Limpiar roles en caso de error
+    } finally {
+      setIsLoadingRoles(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAvailableRoles();
+  }, [fetchAvailableRoles]);
 
   const handleOpenModal = (user?: ManagedUser) => {
     if (user) {
@@ -41,12 +63,12 @@ const UserManagement: React.FC = () => {
         full_name: user.full_name,
         email: user.email,
         password: '',
-        role: user.role as Role, // Asegurar el tipo Role
+        role: user.role as RoleName, // Asegurar el tipo RoleName
       });
     } else {
       setIsEditing(false);
       setCurrentUser(null);
-      setFormData({ full_name: '', email: '', password: '', role: 'admin' });
+      setFormData({ full_name: '', email: '', password: '', role: availableRoles[0]?.name || 'admin' }); // Establecer el primer rol disponible como predeterminado
     }
     setShowModal(true);
   };
@@ -137,10 +159,10 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  if (isAppDataLoading) return <div>Cargando usuarios...</div>; // Usar el estado de carga global
+  if (isAppDataLoading || isLoadingRoles) return <div>Cargando usuarios y roles...</div>; // Usar ambos estados de carga
   // Si no hay usuarios y no está cargando, podría ser un error de permisos o que no hay usuarios.
   // El error ya se maneja en App.tsx y se loguea. Aquí solo mostramos un mensaje si la lista está vacía.
-  if (users.length === 0) return <div className="text-red-500 bg-red-100 p-4 rounded-lg">No se pudieron cargar los usuarios o no hay usuarios disponibles. Solo los superadministradores pueden ver esta página.</div>;
+  if (users.length === 0 && !isAppDataLoading) return <div className="text-red-500 bg-red-100 p-4 rounded-lg">No se pudieron cargar los usuarios o no hay usuarios disponibles. Solo los superadministradores pueden ver esta página.</div>;
 
 
   return (
@@ -209,9 +231,12 @@ const UserManagement: React.FC = () => {
               <Input label={isEditing ? "Nueva Contraseña (opcional)" : "Contraseña"} type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required={!isEditing} />
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as Role})}>
-                  <option value="admin">Admin</option>
-                  <option value="superadmin">Superadmin</option>
+                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as RoleName})}>
+                  {availableRoles.map(role => (
+                    <option key={role.id} value={role.name}>
+                      {role.name}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="pt-4 border-t flex justify-end gap-3">
