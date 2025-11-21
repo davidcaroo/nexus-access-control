@@ -4,7 +4,7 @@ export interface User {
   id: string;
   email?: string;
   full_name: string;
-  role: Role;
+  role: string; // Now a string representing the role name
   avatar_url?: string;
 }
 

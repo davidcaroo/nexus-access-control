@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine, Shield, AlarmClockPlus, Settings, QrCode, ChevronLeft } from 'lucide-react';
 import { AppContext } from '../App';
 import { useSidebar } from '../src/context/SidebarContext';
+import { usePermissions } from '../src/context/PermissionsContext';
 
 interface SidebarLinkProps {
   to: string;
@@ -35,6 +36,7 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({ to, icon, label, target }) =>
 export const Sidebar: React.FC = () => {
   const { logout, authState } = React.useContext(AppContext)!;
   const { isCollapsed, toggleCollapse, isMobileOpen, closeMobileSidebar } = useSidebar();
+  const { can } = usePermissions();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -60,20 +62,15 @@ export const Sidebar: React.FC = () => {
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          <SidebarLink to="/admin/dashboard" icon={<LayoutDashboard size={20} />} label="Dashboard" />
-          {(authState.user?.role === 'admin' || authState.user?.role === 'superadmin') && (
-            <SidebarLink to="/admin/employees" icon={<Users size={20} />} label="Personal" />
-          )}
-          <SidebarLink to="/admin/reports" icon={<FileBarChart size={20} />} label="Reportes" />
-          {(authState.user?.role === 'admin' || authState.user?.role === 'superadmin') && (
-            <SidebarLink to="/admin/overtime" icon={<AlarmClockPlus size={20} />} label="Horas Extra" />
-          )}
-          {authState.user?.role === 'superadmin' && (
-            <SidebarLink to="/admin/users" icon={<Shield size={20} />} label="Usuarios y Roles" />
-          )}
+          {can('dashboard:view') && <SidebarLink to="/admin/dashboard" icon={<LayoutDashboard size={20} />} label="Dashboard" />}
+          {can('employees:view') && <SidebarLink to="/admin/employees" icon={<Users size={20} />} label="Personal" />}
+          {can('reports:view') && <SidebarLink to="/admin/reports" icon={<FileBarChart size={20} />} label="Reportes" />}
+          {can('overtime:view') && <SidebarLink to="/admin/overtime" icon={<AlarmClockPlus size={20} />} label="Horas Extra" />}
+          {can('users:view') && <SidebarLink to="/admin/users" icon={<Shield size={20} />} label="Usuarios y Roles" />}
+          
           <div className="!my-4 border-t border-slate-800"></div>
           <SidebarLink to="/" target="_blank" icon={<QrCode size={20} />} label="Terminal de Acceso" />
-          <SidebarLink to="/admin/settings" icon={<Settings size={20} />} label="Ajustes" />
+          {can('settings:view') && <SidebarLink to="/admin/settings" icon={<Settings size={20} />} label="Ajustes" />}
         </nav>
 
         <div className="p-4 border-t border-slate-800">

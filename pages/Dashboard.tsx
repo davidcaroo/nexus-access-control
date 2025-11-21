@@ -6,9 +6,11 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
 import { ManualAttendanceModal } from '../components/ManualAttendanceModal';
+import { usePermissions } from '../src/context/PermissionsContext';
 
 const Dashboard: React.FC = () => {
-  const { employees, records, authState } = useContext(AppContext)!;
+  const { employees, records } = useContext(AppContext)!;
+  const { can } = usePermissions();
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
   const stats = useMemo(() => {
@@ -43,7 +45,7 @@ const Dashboard: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">Panel de Control</h1>
-        {(authState.user?.role === 'admin' || authState.user?.role === 'superadmin') && (
+        {can('employees:create') && (
           <Button variant="outline" onClick={() => setIsManualModalOpen(true)}>
             <Edit size={16} className="mr-2" />
             Registro Manual
