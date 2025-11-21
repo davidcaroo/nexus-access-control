@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useContext } from 'react';
 import { AppContext } from '../App';
-import { Card, Input } from '../components/UIComponents';
-import { Employee, AttendanceRecord } from '../types';
-import { Clock } from 'lucide-react';
+import { Card, Input, Button } from '../components/UIComponents';
+import { Employee, AttendanceRecord, EmployeeOvertimeData, DailyOvertimeDetail } from '../types';
+import { Clock, Eye } from 'lucide-react';
+import { OvertimeDetailModal } from '../src/components/OvertimeDetailModal'; // Importar el nuevo modal
 
 // Helper para formatear minutos a "Xh Ym"
 const formatMinutesToHours = (totalMinutes: number) => {
@@ -23,6 +24,9 @@ const OvertimeReport: React.FC = () => {
   const [startDate, setStartDate] = useState(firstDayOfMonth);
   const [endDate, setEndDate] = useState(todayISO);
 
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedEmployeeOvertimeData, setSelectedEmployeeOvertimeData] = useState<EmployeeOvertimeData | null>(null);
+
   const overtimeData = useMemo(() => {
     const filteredRecords = records.filter(r => r.fecha >= startDate && r.fecha <= endDate);
     
@@ -34,13 +38,14 @@ const OvertimeReport: React.FC = () => {
       recordsByEmployee[record.employee_id].push(record);
     }
 
-    const results: { employee: Employee; overtimeMinutes: number }[] = [];
+    const results: EmployeeOvertimeData[] = [];
 
     for (const employee of employees) {
       const employeeRecords = recordsByEmployee[employee.id] || [];
       if (employeeRecords.length === 0) continue;
 
       let totalOvertime = 0;
+      const dailyDetails: DailyOvertimeDetail[] = [];
       
       const recordsByDate: { [key: string]: AttendanceRecord[] } = {};
       for (const record of employeeRecords) {
@@ -50,28 +55,53 @@ const OvertimeReport: React.FC = () => {
 
       for (const date in recordsByDate) {
         const dailyRecords = recordsByDate[date];
+        const firstEntrada = dailyRecords
+          .filter(r => r.tipo === 'entrada')
+          .sort((a, b) => a.hora.localeCompare(b.hora))[0]; // Primera entrada
         const lastSalida = dailyRecords
           .filter(r => r.tipo === 'salida')
-          .sort((a, b) => b.hora.localeCompare(a.hora))[0];
+          .sort((a, b) => b.hora.localeCompare(a.hora))[0]; // Última salida
 
-        if (lastSalida && employee.horario_salida) {
+        if (firstEntrada && lastSalida && employee.horario_salida) {
           const scheduleExitTime = new Date(`1970-01-01T${employee.horario_salida}`);
           const actualExitTime = new Date(`1970-01-01T${lastSalida.hora}`);
 
+          let dailyOvertimeMinutes = 0;
           if (actualExitTime > scheduleExitTime) {
             const diffMillis = actualExitTime.getTime() - scheduleExitTime.getTime();
-            totalOvertime += Math.round(diffMillis / 60000); // Convert to minutes
+            dailyOvertimeMinutes = Math.round(diffMillis / 60000); // Convertir a minutos
+          }
+
+          if (dailyOvertimeMinutes > 0) {
+            totalOvertime += dailyOvertimeMinutes;
+            dailyDetails.push({
+              date: date,
+              entryTime: firstEntrada.hora,
+              actualExitTime: lastSalida.hora,
+              scheduledExitTime: employee.horario_salida,
+              dailyOvertimeMinutes: dailyOvertimeMinutes,
+            });
           }
         }
       }
       
       if (totalOvertime > 0) {
-        results.push({ employee, overtimeMinutes: totalOvertime });
+        results.push({ employee, totalOvertimeMinutes: totalOvertime, dailyDetails });
       }
     }
 
-    return results.sort((a, b) => b.overtimeMinutes - a.overtimeMinutes);
+    return results.sort((a, b) => b.totalOvertimeMinutes - a.totalOvertimeMinutes);
   }, [employees, records, startDate, endDate]);
+
+  const handleOpenDetailModal = (data: EmployeeOvertimeData) => {
+    setSelectedEmployeeOvertimeData(data);
+    setShowDetailModal(true);
+  };
+
+  const handleCloseDetailModal = () => {
+    setShowDetailModal(false);
+    setSelectedEmployeeOvertimeData(null);
+  };
 
   return (
     <div className="space-y-6">
@@ -95,20 +125,26 @@ const OvertimeReport: React.FC = () => {
                   <th className="px-4 py-3 font-medium">Empleado</th>
                   <th className="px-4 py-3 font-medium">Departamento</th>
                   <th className="px-4 py-3 font-medium text-right">Horas Extra Acumuladas</th>
+                  <th className="px-4 py-3 font-medium text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="text-sm divide-y">
-                {overtimeData.map(({ employee, overtimeMinutes }) => (
-                  <tr key={employee.id}>
+                {overtimeData.map((data) => (
+                  <tr key={data.employee.id}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <img src={employee.foto} alt={employee.nombre} className="w-10 h-10 rounded-full object-cover" />
-                        <span className="font-medium">{employee.nombre}</span>
+                        <img src={data.employee.foto} alt={data.employee.nombre} className="w-10 h-10 rounded-full object-cover" />
+                        <span className="font-medium">{data.employee.nombre}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3">{employee.departamento}</td>
+                    <td className="px-4 py-3">{data.employee.departamento}</td>
                     <td className="px-4 py-3 text-right font-medium text-lg text-blue-600">
-                      {formatMinutesToHours(overtimeMinutes)}
+                      {formatMinutesToHours(data.totalOvertimeMinutes)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button variant="outline" size="sm" onClick={() => handleOpenDetailModal(data)} title="Ver Detalles">
+                        <Eye size={16} />
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -122,6 +158,14 @@ const OvertimeReport: React.FC = () => {
           )}
         </div>
       </Card>
+
+      {selectedEmployeeOvertimeData && (
+        <OvertimeDetailModal
+          isOpen={showDetailModal}
+          onClose={handleCloseDetailModal}
+          employeeOvertimeData={selectedEmployeeOvertimeData}
+        />
+      )}
     </div>
   );
 };

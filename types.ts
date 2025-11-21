@@ -80,3 +80,18 @@ export interface Role {
   created_at: string;
   permissions: string[]; // Array de acciones de permiso (strings)
 }
+
+// Nuevas interfaces para el reporte de horas extra
+export interface DailyOvertimeDetail {
+  date: string;
+  entryTime: string;
+  actualExitTime: string;
+  scheduledExitTime: string;
+  dailyOvertimeMinutes: number;
+}
+
+export interface EmployeeOvertimeData {
+  employee: Employee;
+  totalOvertimeMinutes: number;
+  dailyDetails: DailyOvertimeDetail[];
+}
