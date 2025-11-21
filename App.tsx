@@ -145,13 +145,24 @@ const App: React.FC = () => {
     if (empError || !employee) return { success: false, message: 'Empleado no encontrado' };
 
     const now = new Date();
-    const isLate = tipo === 'entrada' && now.toTimeString().slice(0, 8) > employee.horario_entrada;
+    const currentTime = now.toTimeString().slice(0, 8); // Formato "HH:mm:ss"
+
+    let isLate = false;
+    if (tipo === 'entrada' && employee.horario_entrada) {
+      // Para una comparación robusta, creamos objetos Date en una fecha arbitraria.
+      const scheduleEntryTime = new Date(`1970-01-01T${employee.horario_entrada}`);
+      const actualEntryTime = new Date(`1970-01-01T${currentTime}`);
+      
+      isLate = actualEntryTime > scheduleEntryTime;
+    }
 
     const { error } = await supabase.from('attendance_records').insert({
       employee_id: employee.id,
       tipo: tipo,
       metodo: metodo,
-      tardanza: isLate
+      tardanza: isLate,
+      fecha: now.toISOString().split('T')[0], // YYYY-MM-DD
+      hora: currentTime,
     });
 
     if (error) return { success: false, message: 'Error al registrar el acceso' };
