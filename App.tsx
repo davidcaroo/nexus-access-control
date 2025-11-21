@@ -30,7 +30,7 @@ export const AppContext = React.createContext<{
   fetchRecords: () => void;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
-  addRecord: (cedula: string, tipo: 'entrada' | 'salida', metodo: 'manual' | 'qr') => Promise<{ success: boolean; message: string; employee?: Employee }>;
+  addRecord: (cedula: string, metodo: 'manual' | 'qr', tipo?: 'entrada' | 'salida') => Promise<{ success: boolean; message: string; employee?: Employee }>;
   addEmployee: (emp: Partial<Employee>) => Promise<{ error: any }>;
   updateEmployee: (id: string, emp: Partial<Employee>) => Promise<{ error: any }>;
 } | null>(null);
@@ -130,43 +130,19 @@ const App: React.FC = () => {
     setAuthState({ isAuthenticated: false, user: null });
   }, []);
 
-  const addRecord = useCallback(async (cedula: string, tipo: 'entrada' | 'salida', metodo: 'manual' | 'qr') => {
-    const { data: employee, error: empError } = await supabase.from('employees').select('*').eq('cedula', cedula).single();
-    if (empError || !employee) return { success: false, message: 'Empleado no encontrado' };
+  const addRecord = useCallback(async (cedula: string, metodo: 'manual' | 'qr', tipo?: 'entrada' | 'salida') => {
+    const { data, error } = await supabase.rpc('register_attendance', {
+      p_cedula: cedula,
+      p_metodo: metodo,
+      p_tipo: tipo,
+    });
 
-    const today = new Date().toISOString().split('T')[0];
-    const { data: todaysRecords, error: recordsError } = await supabase
-      .from('attendance_records')
-      .select('tipo')
-      .eq('employee_id', employee.id)
-      .eq('fecha', today);
-
-    if (recordsError) return { success: false, message: 'Error al verificar registros' };
-
-    const hasEntrada = todaysRecords.some(r => r.tipo === 'entrada');
-    const hasSalida = todaysRecords.some(r => r.tipo === 'salida');
-
-    if (tipo === 'entrada' && hasEntrada) {
-      return { success: false, message: 'Ya se registró una entrada hoy' };
+    if (error) {
+      console.error("Error en RPC register_attendance:", error);
+      return { success: false, message: 'Error al procesar el registro.' };
     }
-    if (tipo === 'salida') {
-      if (!hasEntrada) return { success: false, message: 'Debe registrar entrada primero' };
-      if (hasSalida) return { success: false, message: 'Ya se registró una salida hoy' };
-    }
-
-    const now = new Date();
-    const currentTime = now.toTimeString().slice(0, 8);
-
-    let isLate = false;
-    if (tipo === 'entrada' && employee.horario_entrada) {
-      const scheduleEntryTime = new Date(`1970-01-01T${employee.horario_entrada}`);
-      const actualEntryTime = new Date(`1970-01-01T${currentTime}`);
-      isLate = actualEntryTime > scheduleEntryTime;
-    }
-
-    const { error } = await supabase.from('attendance_records').insert({ employee_id: employee.id, tipo, metodo, tardanza: isLate, fecha: today, hora: currentTime });
-    if (error) return { success: false, message: 'Error al registrar el acceso' };
-    return { success: true, message: `Registro exitoso: ${tipo.toUpperCase()}`, employee };
+    
+    return data;
   }, []);
 
   const addEmployee = useCallback(async (emp: Partial<Employee>) => {

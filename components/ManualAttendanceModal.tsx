@@ -28,7 +28,7 @@ export const ManualAttendanceModal: React.FC<ManualAttendanceModalProps> = ({ is
 
     setIsProcessing(true);
     try {
-      const result = await addRecord(employee.cedula, tipo, 'manual');
+      const result = await addRecord(employee.cedula, 'manual', tipo);
       if (result.success) {
         toast.success(result.message);
         onClose();

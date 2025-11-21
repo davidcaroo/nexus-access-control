@@ -6,7 +6,6 @@ import { Button, Card } from '../components/UIComponents';
 import { Employee } from '../types';
 import toast from 'react-hot-toast';
 import { QRScanner } from '../src/components/QRScanner';
-import { supabase } from '../src/integrations/supabase/client';
 
 const AccessTerminal: React.FC = () => {
   const { addRecord } = useContext(AppContext)!;
@@ -29,12 +28,12 @@ const AccessTerminal: React.FC = () => {
     }
   }, [status]);
 
-  const processAccess = useCallback(async (cedula: string, tipo: 'entrada' | 'salida', metodo: 'manual' | 'qr') => {
+  const processAccess = useCallback(async (cedula: string, metodo: 'manual' | 'qr', tipo?: 'entrada' | 'salida') => {
     if (!cedula || isProcessing) return;
     
     setIsProcessing(true);
     try {
-      const result = await addRecord(cedula, tipo, metodo);
+      const result = await addRecord(cedula, metodo, tipo);
       if (result.success) {
         setStatus({ type: 'success', message: result.message, employee: result.employee });
         toast.success(result.message);
@@ -54,30 +53,7 @@ const AccessTerminal: React.FC = () => {
   
   const handleScanSuccess = useCallback(async (cedula: string) => {
     if (isProcessing) return;
-
-    const today = new Date().toISOString().split('T')[0];
-    const { data: employee, error: empError } = await supabase.from('employees').select('id').eq('cedula', cedula).single();
-    if (empError || !employee) {
-      setStatus({ type: 'error', message: 'Empleado no encontrado' });
-      toast.error('Empleado no encontrado');
-      return;
-    }
-
-    const { data: todaysRecords, error: recError } = await supabase
-      .from('attendance_records')
-      .select('tipo')
-      .eq('employee_id', employee.id)
-      .eq('fecha', today);
-
-    if (recError) {
-      setStatus({ type: 'error', message: 'Error al verificar registros' });
-      return;
-    }
-
-    const hasEntrada = todaysRecords.some(r => r.tipo === 'entrada');
-    const nextAction = hasEntrada ? 'salida' : 'entrada';
-    
-    await processAccess(cedula, nextAction, 'qr');
+    await processAccess(cedula, 'qr');
   }, [processAccess, isProcessing]);
 
   const handleScanFailure = useCallback((error: string) => {
@@ -163,8 +139,8 @@ const AccessTerminal: React.FC = () => {
                     <form onSubmit={(e) => e.preventDefault()} className="space-y-6">
                       <input type="text" value={cedulaInput} onChange={e => setCedulaInput(e.target.value)} className="w-full bg-slate-900 border-2 border-slate-700 text-white text-3xl text-center py-4 rounded-xl" placeholder="000000" autoFocus />
                       <div className="grid grid-cols-2 gap-4">
-                        <Button type="button" onClick={() => processAccess(cedulaInput, 'entrada', 'manual')} isLoading={isProcessing} className="bg-emerald-600 hover:bg-emerald-700 py-4 text-lg"><LogIn className="mr-2" /> Entrada</Button>
-                        <Button type="button" onClick={() => processAccess(cedulaInput, 'salida', 'manual')} isLoading={isProcessing} className="bg-amber-600 hover:bg-amber-700 py-4 text-lg"><LogOut className="mr-2" /> Salida</Button>
+                        <Button type="button" onClick={() => processAccess(cedulaInput, 'manual', 'entrada')} isLoading={isProcessing} className="bg-emerald-600 hover:bg-emerald-700 py-4 text-lg"><LogIn className="mr-2" /> Entrada</Button>
+                        <Button type="button" onClick={() => processAccess(cedulaInput, 'manual', 'salida')} isLoading={isProcessing} className="bg-amber-600 hover:bg-amber-700 py-4 text-lg"><LogOut className="mr-2" /> Salida</Button>
                       </div>
                     </form>
                   </div>
