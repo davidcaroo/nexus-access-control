@@ -33,6 +33,13 @@ const Dashboard: React.FC = () => {
     const absentCount = totalEmployees - presentCount;
     const lates = todaysRecords.filter(r => r.tardanza && r.tipo === 'entrada').length;
 
+    // --- Debugging Logs ---
+    console.log("Dashboard Stats: Today's records:", todaysRecords);
+    console.log("Dashboard Stats: Employee last status (for on-site calculation):", employeeLastStatus);
+    console.log("Dashboard Stats: Calculated onSiteCount (employees whose last record is 'entrada'):", onSiteCount);
+    console.log("Dashboard Stats: Calculated lates (entry records marked as tardy):", lates);
+    // --- End Debugging Logs ---
+
     return { totalEmployees, presentCount, onSiteCount, absentCount, lates };
   }, [employees, records]);
 
@@ -56,7 +63,12 @@ const Dashboard: React.FC = () => {
         <StatCard title="Total Personal" value={stats.totalEmployees} icon={<Users className="text-blue-600" />} />
         <StatCard title="Presentes Hoy" value={stats.presentCount} icon={<UserCheck className="text-emerald-600" />} subtext={`${((stats.presentCount/stats.totalEmployees)*100 || 0).toFixed(0)}% asistencia`} />
         <StatCard title="Ausentes" value={stats.absentCount} icon={<UserX className="text-red-600" />} />
-        <StatCard title="Tardanzas" value={stats.lates} icon={<Clock className="text-amber-600" />} />
+        <StatCard 
+          title="Tardanzas" 
+          value={stats.lates} 
+          icon={<Clock className="text-amber-600" />} 
+          subtext="Entradas registradas después del horario" 
+        />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2" title="Estado Actual del Personal">
