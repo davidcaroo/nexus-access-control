@@ -16,7 +16,10 @@ const AccessTerminal: React.FC = () => {
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string, employee?: Employee }>({ type: 'idle', message: '' });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const isProcessingRef = useRef(false);
+  
+  // --- NUEVA LÓGICA ---
+  // 1. "Área de espera" para el código escaneado
+  const [scannedCedula, setScannedCedula] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -31,11 +34,9 @@ const AccessTerminal: React.FC = () => {
   }, [status]);
 
   const processAccess = useCallback(async (cedula: string, tipo: 'entrada' | 'salida', metodo: 'manual' | 'qr') => {
-    if (!cedula || isProcessingRef.current) return;
+    if (!cedula || isProcessing) return;
     
-    isProcessingRef.current = true;
     setIsProcessing(true);
-
     try {
       const result = await addRecord(cedula, tipo, metodo);
       if (result.success) {
@@ -50,21 +51,27 @@ const AccessTerminal: React.FC = () => {
       setStatus({ type: 'error', message: 'Ocurrió un error inesperado.' });
       toast.error('Ocurrió un error inesperado.');
     } finally {
-      isProcessingRef.current = false;
       setIsProcessing(false);
       setCedulaInput('');
     }
-  }, [addRecord]);
+  }, [addRecord, isProcessing]);
   
-  const handleScan = useCallback((scannedCedula: string) => {
+  // 2. La función de escaneo ahora es súper simple: solo guarda el dato.
+  const handleScan = useCallback((data: string) => {
+    setScannedCedula(data);
     setIsScannerOpen(false);
+  }, []);
 
-    // Fire-and-forget the async logic to not block the scanner callback
-    (async () => {
+  // 3. El "vigilante" que procesa el dato cuando llega.
+  useEffect(() => {
+    const processScannedCode = async () => {
+      if (!scannedCedula) return;
+
       const { data: employee, error } = await supabase.from('employees').select('id').eq('cedula', scannedCedula).single();
       if (error || !employee) {
         setStatus({ type: 'error', message: 'Empleado no encontrado' });
         toast.error('Empleado no encontrado');
+        setScannedCedula(null); // Limpiar el área de espera
         return;
       }
 
@@ -75,8 +82,11 @@ const AccessTerminal: React.FC = () => {
       const type = !lastRecord || lastRecord.tipo === 'salida' ? 'entrada' : 'salida';
       
       await processAccess(scannedCedula, type, 'qr');
-    })();
-  }, [records, processAccess]);
+      setScannedCedula(null); // Limpiar el área de espera
+    };
+
+    processScannedCode();
+  }, [scannedCedula, records, processAccess]);
 
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col relative overflow-hidden">
