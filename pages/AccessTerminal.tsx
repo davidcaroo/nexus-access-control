@@ -120,50 +120,56 @@ const AccessTerminal: React.FC = () => {
           <div className="space-y-8">
             <div className="bg-slate-800/50 p-2 rounded-2xl border border-white/10 flex"><button onClick={() => setMode('scan')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 ${mode === 'scan' ? 'bg-blue-600' : 'text-slate-400'}`}><QrCode size={18} /> Escáner QR</button><button onClick={() => setMode('manual')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 ${mode === 'manual' ? 'bg-blue-600' : 'text-slate-400'}`}><UserIcon size={18} /> Teclado</button></div>
             <Card className="bg-slate-800 border-slate-700 text-slate-100 min-h-[400px] flex flex-col justify-center relative overflow-hidden">
-              {status.type === 'success' && status.employee ? (() => {
-                const isEntry = status.message.toUpperCase().includes('ENTRADA');
-                const color = isEntry ? 'emerald' : 'amber';
-                const Icon = isEntry ? LogIn : LogOut;
-                return (
-                  <div className={`absolute inset-0 z-20 bg-${color}-500/20 backdrop-blur-md flex flex-col items-center justify-center text-center p-6`}>
-                    <div className={`w-32 h-32 rounded-full border-4 border-${color}-500 overflow-hidden mb-4`}>
-                      <img src={status.employee.foto} alt={status.employee.nombre} className="w-full h-full object-cover" />
+              {
+                status.type === 'success' && status.employee ? (() => {
+                  const isEntry = status.message.toUpperCase().includes('ENTRADA');
+                  const color = isEntry ? 'emerald' : 'amber';
+                  const Icon = isEntry ? LogIn : LogOut;
+                  return (
+                    <div className={`flex flex-col items-center justify-center text-center p-6`}>
+                      <div className={`w-32 h-32 rounded-full border-4 border-${color}-500 overflow-hidden mb-4`}>
+                        <img src={status.employee.foto} alt={status.employee.nombre} className="w-full h-full object-cover" />
+                      </div>
+                      <h2 className="text-3xl font-bold mb-1">{status.employee.nombre}</h2>
+                      <p className={`text-${color}-300 text-lg mb-6`}>{status.employee.cargo}</p>
+                      <div className={`flex items-center gap-2 bg-${color}-500/20 text-${color}-200 px-6 py-3 rounded-full text-xl font-bold`}>
+                        <Icon size={28} /> {status.message}
+                      </div>
                     </div>
-                    <h2 className="text-3xl font-bold mb-1">{status.employee.nombre}</h2>
-                    <p className={`text-${color}-300 text-lg mb-6`}>{status.employee.cargo}</p>
-                    <div className={`flex items-center gap-2 bg-${color}-500/20 text-${color}-200 px-6 py-3 rounded-full text-xl font-bold`}>
-                      <Icon size={28} /> {status.message}
+                  );
+                })() : status.type === 'error' ? (
+                  <div className="flex flex-col items-center justify-center text-center p-6">
+                    <div className="w-24 h-24 bg-red-500/20 rounded-full flex items-center justify-center mb-4">
+                      <AlertCircle className="w-12 h-12 text-red-500" />
                     </div>
+                    <h3 className="text-2xl font-bold text-red-200 mb-2">Error de Acceso</h3>
+                    <p className="text-white/80">{status.message}</p>
                   </div>
-                );
-              })() : status.type === 'error' ? (
-                <div className="absolute inset-0 z-20 bg-red-500/20 backdrop-blur-md flex flex-col items-center justify-center text-center p-6"><div className="w-24 h-24 bg-red-500/20 rounded-full flex items-center justify-center mb-4"><AlertCircle className="w-12 h-12 text-red-500" /></div><h3 className="text-2xl font-bold text-red-200 mb-2">Error de Acceso</h3><p className="text-white/80">{status.message}</p></div>
-              ) : null}
-              
-              {mode === 'scan' ? (
-                <div className="p-4">
-                  {scannerError ? (
-                    <div className="text-center text-red-400 bg-red-900/50 p-6 rounded-lg">
-                      <CameraOff size={48} className="mx-auto mb-4" />
-                      <h3 className="font-bold mb-2">Error de Cámara</h3>
-                      <p className="text-sm">{scannerError}</p>
-                    </div>
-                  ) : (
-                    <QRScanner onScanSuccess={handleScanSuccess} onScanFailure={handleScanFailure} />
-                  )}
-                </div>
-              ) : (
-                <div className="p-8">
-                  <h3 className="text-xl font-semibold mb-6 text-center">Ingrese Cédula</h3>
-                  <form onSubmit={(e) => e.preventDefault()} className="space-y-6">
-                    <input type="text" value={cedulaInput} onChange={e => setCedulaInput(e.target.value)} className="w-full bg-slate-900 border-2 border-slate-700 text-white text-3xl text-center py-4 rounded-xl" placeholder="000000" autoFocus />
-                    <div className="grid grid-cols-2 gap-4">
-                      <Button type="button" onClick={() => processAccess(cedulaInput, 'entrada', 'manual')} isLoading={isProcessing} className="bg-emerald-600 hover:bg-emerald-700 py-4 text-lg"><LogIn className="mr-2" /> Entrada</Button>
-                      <Button type="button" onClick={() => processAccess(cedulaInput, 'salida', 'manual')} isLoading={isProcessing} className="bg-amber-600 hover:bg-amber-700 py-4 text-lg"><LogOut className="mr-2" /> Salida</Button>
-                    </div>
-                  </form>
-                </div>
-              )}
+                ) : mode === 'scan' ? (
+                  <div className="p-4">
+                    {scannerError ? (
+                      <div className="text-center text-red-400 bg-red-900/50 p-6 rounded-lg">
+                        <CameraOff size={48} className="mx-auto mb-4" />
+                        <h3 className="font-bold mb-2">Error de Cámara</h3>
+                        <p className="text-sm">{scannerError}</p>
+                      </div>
+                    ) : (
+                      <QRScanner onScanSuccess={handleScanSuccess} onScanFailure={handleScanFailure} />
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-8">
+                    <h3 className="text-xl font-semibold mb-6 text-center">Ingrese Cédula</h3>
+                    <form onSubmit={(e) => e.preventDefault()} className="space-y-6">
+                      <input type="text" value={cedulaInput} onChange={e => setCedulaInput(e.target.value)} className="w-full bg-slate-900 border-2 border-slate-700 text-white text-3xl text-center py-4 rounded-xl" placeholder="000000" autoFocus />
+                      <div className="grid grid-cols-2 gap-4">
+                        <Button type="button" onClick={() => processAccess(cedulaInput, 'entrada', 'manual')} isLoading={isProcessing} className="bg-emerald-600 hover:bg-emerald-700 py-4 text-lg"><LogIn className="mr-2" /> Entrada</Button>
+                        <Button type="button" onClick={() => processAccess(cedulaInput, 'salida', 'manual')} isLoading={isProcessing} className="bg-amber-600 hover:bg-amber-700 py-4 text-lg"><LogOut className="mr-2" /> Salida</Button>
+                      </div>
+                    </form>
+                  </div>
+                )
+              }
             </Card>
           </div>
           <div className="hidden lg:block space-y-8 text-slate-300">
