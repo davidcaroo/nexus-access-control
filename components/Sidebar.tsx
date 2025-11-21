@@ -1,6 +1,6 @@
 import React, { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine, Shield, AlarmClockPlus, Settings, QrCode, ChevronLeft } from 'lucide-react';
+import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine, Shield, AlarmClockPlus, Settings, QrCode, ChevronLeft, CalendarCheck } from 'lucide-react';
 import { AppContext } from '../App';
 import { useSidebar } from '../src/context/SidebarContext';
 import { usePermissions } from '../src/context/PermissionsContext';
@@ -64,6 +64,7 @@ export const Sidebar: React.FC = () => {
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {can('dashboard:view') && <SidebarLink to="/admin/dashboard" icon={<LayoutDashboard size={20} />} label="Dashboard" />}
           {can('employees:view') && <SidebarLink to="/admin/employees" icon={<Users size={20} />} label="Personal" />}
+          {can('leave_requests:view') && <SidebarLink to="/admin/leave-requests" icon={<CalendarCheck size={20} />} label="Solicitudes de Ausencia" />}
           {can('reports:view') && <SidebarLink to="/admin/reports" icon={<FileBarChart size={20} />} label="Reportes" />}
           {can('overtime:view') && <SidebarLink to="/admin/overtime" icon={<AlarmClockPlus size={20} />} label="Horas Extra" />}
           {can('users:view') && <SidebarLink to="/admin/users" icon={<Shield size={20} />} label="Usuarios y Roles" />}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { User, Employee, AttendanceRecord, AuthState } from './types';
+import { User, Employee, AttendanceRecord, AuthState, LeaveRequest } from './types';
 import { Layout } from './components/Layout';
 import { supabase } from './src/integrations/supabase/client';
 import { ToastProvider } from './src/components/ToastProvider';
@@ -19,16 +19,19 @@ import Reports from './pages/Reports';
 import UserManagement from './src/pages/UserManagement';
 import OvertimeReport from './pages/OvertimeReport';
 import Settings from './src/pages/Settings';
-import PublicLeaveRequest from './src/pages/PublicLeaveRequest'; // Importar la nueva página
+import PublicLeaveRequest from './src/pages/PublicLeaveRequest';
+import LeaveRequestsManagement from './src/pages/LeaveRequestsManagement'; // Importar la nueva página
 
 // Context for global state
 export const AppContext = React.createContext<{
   authState: AuthState;
   employees: Employee[];
   records: AttendanceRecord[];
+  leaveRequests: LeaveRequest[]; // Añadir leaveRequests al contexto
   isSessionLoading: boolean;
   fetchEmployees: () => void;
   fetchRecords: () => void;
+  fetchLeaveRequests: () => void; // Añadir fetchLeaveRequests al contexto
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   addRecord: (cedula: string, metodo: 'manual' | 'qr', tipo?: 'entrada' | 'salida') => Promise<{ success: boolean; message: string; employee?: Employee }>;
@@ -40,6 +43,7 @@ const App: React.FC = () => {
   const [authState, setAuthState] = useState<AuthState>({ isAuthenticated: false, user: null });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]); // Nuevo estado para solicitudes de ausencia
   const [isSessionLoading, setIsSessionLoading] = useState(true);
 
   const fetchEmployees = useCallback(async () => {
@@ -52,6 +56,12 @@ const App: React.FC = () => {
     const { data, error } = await supabase.from('attendance_records').select('*').order('created_at', { ascending: false });
     if (!error) setRecords(data || []);
     else console.error("Error fetching records:", error);
+  }, []);
+
+  const fetchLeaveRequests = useCallback(async () => {
+    const { data, error } = await supabase.from('leave_requests').select('*').order('requested_at', { ascending: false });
+    if (!error) setLeaveRequests(data || []);
+    else console.error("Error fetching leave requests:", error);
   }, []);
 
   const refreshUser = useCallback(async () => {
@@ -98,8 +108,9 @@ const App: React.FC = () => {
     if (authState.isAuthenticated) {
       fetchEmployees();
       fetchRecords();
+      fetchLeaveRequests(); // Cargar solicitudes de ausencia al autenticarse
     }
-  }, [authState.isAuthenticated, fetchEmployees, fetchRecords]);
+  }, [authState.isAuthenticated, fetchEmployees, fetchRecords, fetchLeaveRequests]);
 
   useEffect(() => {
     console.log("Setting up onAuthStateChange listener...");
@@ -157,13 +168,15 @@ const App: React.FC = () => {
     const recordsChannel = supabase.channel('public:attendance_records').on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_records' }, () => fetchRecords()).subscribe();
     const employeesChannel = supabase.channel('public:employees').on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => fetchEmployees()).subscribe();
     const profilesChannel = supabase.channel('public:profiles').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${authState.user?.id}` }, () => refreshUser()).subscribe();
+    const leaveRequestsChannel = supabase.channel('public:leave_requests').on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => fetchLeaveRequests()).subscribe(); // Suscribirse a cambios en solicitudes de ausencia
 
     return () => {
       supabase.removeChannel(recordsChannel);
       supabase.removeChannel(employeesChannel);
       supabase.removeChannel(profilesChannel);
+      supabase.removeChannel(leaveRequestsChannel); // Limpiar suscripción
     };
-  }, [authState.isAuthenticated, fetchRecords, fetchEmployees, refreshUser, authState.user?.id]);
+  }, [authState.isAuthenticated, fetchRecords, fetchEmployees, refreshUser, authState.user?.id, fetchLeaveRequests]);
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
@@ -196,7 +209,7 @@ const App: React.FC = () => {
     return { error };
   }, []);
 
-  const contextValue = useMemo(() => ({ authState, employees, records, isSessionLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, refreshUser }), [authState, employees, records, isSessionLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, refreshUser]);
+  const contextValue = useMemo(() => ({ authState, employees, records, leaveRequests, isSessionLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, refreshUser }), [authState, employees, records, leaveRequests, isSessionLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, refreshUser]);
 
   return (
     <AppContext.Provider value={contextValue}>
@@ -219,13 +232,16 @@ const AppRoutes = () => {
     <Routes>
       <Route path="/" element={<AccessTerminal />} />
       <Route path="/login" element={!authState.isAuthenticated ? <Login /> : <Navigate to="/admin/dashboard" />} />
-      <Route path="/request-leave" element={<PublicLeaveRequest />} /> {/* Nueva ruta pública */}
+      <Route path="/request-leave" element={<PublicLeaveRequest />} />
       <Route path="/admin" element={authState.isAuthenticated ? <SidebarProvider><PermissionsProvider><Layout /></PermissionsProvider></SidebarProvider> : <Navigate to="/login" />}>
         <Route element={<ProtectedRoute permission="dashboard:view" />}>
           <Route path="dashboard" element={<Dashboard />} />
         </Route>
         <Route element={<ProtectedRoute permission="employees:view" />}>
           <Route path="employees" element={<EmployeeManager />} />
+        </Route>
+        <Route element={<ProtectedRoute permission="leave_requests:view" />}> {/* Nueva ruta protegida */}
+          <Route path="leave-requests" element={<LeaveRequestsManagement />} />
         </Route>
         <Route element={<ProtectedRoute permission="overtime:view" />}>
           <Route path="overtime" element={<OvertimeReport />} />
