@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { Camera } from 'lucide-react';
 
 interface QRScannerProps {
@@ -11,18 +11,12 @@ const qrcodeRegionId = "qr-code-full-region";
 
 export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailure }) => {
   useEffect(() => {
+    // Creamos una nueva instancia cada vez que el componente se monta.
+    // Esto es más seguro ya que la librería gestiona mucho estado del DOM.
     const html5Qrcode = new Html5Qrcode(qrcodeRegionId);
-    let isMounted = true;
 
-    const startScanner = async () => {
+    const start = async () => {
       try {
-        if (!isMounted) return;
-        
-        // Detener cualquier escáner activo antes de iniciar uno nuevo
-        if (html5Qrcode.getState() === Html5QrcodeScannerState.SCANNING) {
-          await html5Qrcode.stop();
-        }
-
         await html5Qrcode.start(
           { facingMode: "environment" },
           {
@@ -34,29 +28,30 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailu
             onScanSuccess(decodedText);
           },
           (errorMessage) => {
-            if (onScanFailure) {
-              onScanFailure(errorMessage);
-            }
+            // Este callback es para errores de "QR no encontrado", podemos ignorarlo.
           }
         );
       } catch (err) {
-        console.error("Error al iniciar el escáner QR:", err);
         if (onScanFailure) {
           onScanFailure(String(err));
         }
       }
     };
 
-    startScanner();
+    start();
 
+    // La función de limpieza es crucial. Se ejecuta cuando el componente se desmonta.
     return () => {
-      isMounted = false;
+      // Es importante comprobar si el escáner está activo antes de detenerlo.
+      // El método stop() es asíncrono y devuelve una promesa.
       if (html5Qrcode.isScanning) {
-        html5Qrcode.stop().catch(err => {
-          console.error("Error al detener el escáner QR:", err);
+        html5Qrcode.stop().catch((err) => {
+          console.error("Fallo al detener el escáner QR.", err);
         });
       }
     };
+    // El array de dependencias asegura que este efecto se ejecute solo cuando los callbacks cambian.
+    // Al memorizarlos en el padre, nos aseguramos de que solo se ejecute al montar y desmontar.
   }, [onScanSuccess, onScanFailure]);
 
   return (

@@ -80,14 +80,14 @@ const AccessTerminal: React.FC = () => {
     await processAccess(cedula, nextAction, 'qr');
   }, [processAccess, isProcessing]);
 
-  const handleScanFailure = (error: string) => {
+  const handleScanFailure = useCallback((error: string) => {
     console.error(`QR Scanner Error: ${error}`);
     if (error.toLowerCase().includes('permission')) {
       setScannerError('Permiso de cámara denegado. Por favor, habilítelo en su navegador.');
     } else {
       setScannerError('No se pudo iniciar la cámara. Verifique los permisos y que no esté en uso.');
     }
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col relative overflow-hidden">
