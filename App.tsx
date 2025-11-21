@@ -39,7 +39,7 @@ export const AppContext = React.createContext<{
 const App: React.FC = () => {
   const [authState, setAuthState] = useState<AuthState>({ isAuthenticated: false, user: null });
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [records, setRecords] = useState<AttendanceRecord[]>(([]);
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
 
   const fetchEmployees = useCallback(async () => {
