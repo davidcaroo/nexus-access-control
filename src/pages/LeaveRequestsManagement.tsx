@@ -9,10 +9,11 @@ import { LeaveRequest } from '../../types';
 import { usePermissions } from '../context/PermissionsContext';
 
 const LeaveRequestsManagement: React.FC = () => {
-  const { employees, authState, fetchEmployees } = useContext(AppContext)!;
+  const { employees, authState, fetchEmployees, leaveRequests, fetchLeaveRequests } = useContext(AppContext)!;
   const { can } = usePermissions();
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Usamos un estado de carga local para la primera vez que se monta el componente
+  // Después, dependemos de los datos del contexto que se actualizan en tiempo real.
+  const [initialLoading, setInitialLoading] = useState(true); 
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -22,30 +23,17 @@ const LeaveRequestsManagement: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  const fetchLeaveRequests = useCallback(async () => {
-    setLoading(true);
-    let query = supabase.from('leave_requests').select('*').order('requested_at', { ascending: false });
-
-    if (filterStatus !== 'all') {
-      query = query.eq('status', filterStatus);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      console.error("Error fetching leave requests:", error);
-      toast.error("Error al cargar las solicitudes de ausencia.");
-    } else {
-      setLeaveRequests(data || []);
-    }
-    setLoading(false);
-  }, [filterStatus]);
-
   useEffect(() => {
-    fetchLeaveRequests();
-    if (employees.length === 0) { // Asegurarse de que los empleados estén cargados para mostrar nombres
-      fetchEmployees();
-    }
-  }, [fetchLeaveRequests, employees.length, fetchEmployees]);
+    const loadData = async () => {
+      setInitialLoading(true);
+      await fetchLeaveRequests(); // Cargar las solicitudes iniciales desde el contexto
+      if (employees.length === 0) {
+        await fetchEmployees(); // Asegurarse de que los empleados estén cargados
+      }
+      setInitialLoading(false);
+    };
+    loadData();
+  }, [fetchLeaveRequests, fetchEmployees, employees.length]); // Dependencias para recargar si cambian
 
   const getEmployeeName = (employeeId: string) => {
     const employee = employees.find(emp => emp.id === employeeId);
@@ -92,7 +80,7 @@ const LeaveRequestsManagement: React.FC = () => {
       }
 
       toast.success(`Solicitud ${actionType === 'approve' ? 'aprobada' : 'rechazada'} con éxito.`);
-      fetchLeaveRequests(); // Refrescar la lista
+      await fetchLeaveRequests(); // Refrescar la lista a través del contexto
       setIsConfirmModalOpen(false);
       setSelectedRequest(null);
       setActionType(null);
@@ -110,7 +98,10 @@ const LeaveRequestsManagement: React.FC = () => {
     const employeeCedula = getEmployeeCedula(req.employee_id).toLowerCase();
     const searchLower = searchTerm.toLowerCase();
 
-    return employeeName.includes(searchLower) || employeeCedula.includes(searchLower);
+    const statusMatch = filterStatus === 'all' || req.status === filterStatus;
+    const searchMatch = employeeName.includes(searchLower) || employeeCedula.includes(searchLower);
+
+    return statusMatch && searchMatch;
   });
 
   const getStatusBadgeColor = (status: LeaveRequest['status']) => {
@@ -122,7 +113,7 @@ const LeaveRequestsManagement: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (initialLoading) {
     return <div className="text-center py-12 text-gray-500">Cargando solicitudes...</div>;
   }
 
