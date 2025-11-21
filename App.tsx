@@ -74,41 +74,47 @@ const App: React.FC = () => {
   const fetchUsers = useCallback(async () => {
     // Solo intentar cargar usuarios si el usuario actual es un superadmin
     if (!authState.isAuthenticated || authState.user?.role !== 'superadmin') {
+      console.log("fetchUsers: Not authenticated or not superadmin, skipping user fetch.");
       setUsers([]); // Limpiar usuarios si no está autorizado
       return;
     }
     try {
+      console.log("fetchUsers: Attempting to fetch users from edge function.");
       const { data, error: invokeError } = await supabase.functions.invoke('manage-users', {
         method: 'GET',
       });
       if (invokeError) throw invokeError;
       if (data.error) throw new Error(data.error);
       setUsers(data);
+      console.log("fetchUsers: Successfully fetched users.", data);
     } catch (err: any) {
-      console.error("Error fetching users from edge function:", err.message);
+      console.error("fetchUsers: Error fetching users from edge function:", err.message);
       setUsers([]); // Limpiar usuarios en caso de error
     }
   }, [authState.isAuthenticated, authState.user?.role]); // Dependencias para estabilidad
 
   const refreshUser = useCallback(async () => {
-    console.log("Refreshing user session...");
+    console.log("refreshUser: Refreshing user session...");
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     if (sessionError) {
-      console.error("Error getting session during refresh:", sessionError);
+      console.error("refreshUser: Error getting session during refresh:", sessionError);
       setAuthState({ isAuthenticated: false, user: null });
       return;
     }
 
     if (session?.user) {
+      console.log("refreshUser: Session user found, fetching profile for user:", session.user.id);
       const { data: profile, error: profileError } = await supabase.from('profiles').select('*, roles(name)').eq('id', session.user.id).single();
       
       if (profileError) {
-        console.error("Error fetching profile during refresh:", profileError);
+        console.error("refreshUser: Error fetching profile during refresh:", profileError);
         setAuthState({ isAuthenticated: false, user: null });
         return;
       }
 
       const roleName = (profile?.roles as { name: string } | null)?.name;
+      console.log("refreshUser: Fetched profile roleName:", roleName);
+
       if (profile && roleName && (roleName === 'admin' || roleName === 'superadmin' || roleName === 'hr_manager' || roleName === 'department_head')) { // Incluir nuevos roles
         const user: User = {
           id: session.user.id,
@@ -118,14 +124,14 @@ const App: React.FC = () => {
           avatar_url: profile.avatar_url,
         };
         setAuthState({ isAuthenticated: true, user });
-        console.log("User refreshed and authenticated:", user.full_name);
+        console.log("refreshUser: User refreshed and authenticated:", user.full_name, "Role:", user.role);
       } else {
-        console.log("User role not authorized or profile/role missing during refresh. Signing out.");
+        console.log("refreshUser: User role not authorized or profile/role missing during refresh. Signing out.");
         await supabase.auth.signOut();
         setAuthState({ isAuthenticated: false, user: null });
       }
     } else {
-      console.log("No session user found during refresh.");
+      console.log("refreshUser: No session user found during refresh.");
       setAuthState({ isAuthenticated: false, user: null });
     }
   }, []);
@@ -135,6 +141,7 @@ const App: React.FC = () => {
     const loadAppData = async () => {
       if (authState.isAuthenticated) {
         setIsAppDataLoading(true);
+        console.log("loadAppData: User authenticated, fetching app data...");
         await Promise.all([
           fetchEmployees(),
           fetchRecords(),
@@ -142,29 +149,34 @@ const App: React.FC = () => {
           fetchUsers() // Incluir la carga de usuarios aquí
         ]);
         setIsAppDataLoading(false);
+        console.log("loadAppData: App data fetched.");
+      } else {
+        console.log("loadAppData: User not authenticated, skipping app data fetch.");
       }
     };
     loadAppData();
   }, [authState.isAuthenticated, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers]);
 
   useEffect(() => {
-    console.log("Setting up onAuthStateChange listener...");
+    console.log("onAuthStateChange: Setting up listener...");
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("onAuthStateChange event:", event, "session:", session);
+      console.log("onAuthStateChange: Event:", event, "Session:", session);
       try {
         if (session) {
-          console.log("Session found, fetching profile for user:", session.user.id);
+          console.log("onAuthStateChange: Session found, fetching profile for user:", session.user.id);
           const { data: profile, error: profileError } = await supabase.from('profiles').select('*, roles(name)').eq('id', session.user.id).single();
           
           if (profileError) {
-            console.error("Error fetching profile:", profileError);
+            console.error("onAuthStateChange: Error fetching profile:", profileError);
             throw profileError;
           }
-          console.log("Profile data:", profile);
+          console.log("onAuthStateChange: Profile data:", profile);
 
           const roleName = (profile?.roles as { name: string } | null)?.name;
+          console.log("onAuthStateChange: Fetched profile roleName:", roleName);
+
           if (profile && roleName && (roleName === 'admin' || roleName === 'superadmin' || roleName === 'hr_manager' || roleName === 'department_head')) { // Incluir nuevos roles
-            console.log("User is authorized role.");
+            console.log("onAuthStateChange: User is authorized role.");
             const user: User = {
               id: session.user.id,
               email: session.user.email,
@@ -173,26 +185,27 @@ const App: React.FC = () => {
               avatar_url: profile.avatar_url,
             };
             setAuthState({ isAuthenticated: true, user });
+            console.log("onAuthStateChange: AuthState updated to authenticated. User:", user.full_name, "Role:", user.role);
           } else {
-            console.log("User role not authorized or profile/role missing. Signing out.");
+            console.log("onAuthStateChange: User role not authorized or profile/role missing. Signing out.");
             await supabase.auth.signOut();
             setAuthState({ isAuthenticated: false, user: null });
           }
         } else {
-          console.log("No session found.");
+          console.log("onAuthStateChange: No session found.");
           setAuthState({ isAuthenticated: false, user: null });
         }
       } catch (error) {
-        console.error("Error handling auth state change:", error);
+        console.error("onAuthStateChange: Error handling auth state change:", error);
         setAuthState({ isAuthenticated: false, user: null });
       } finally {
-        console.log("Setting isSessionLoading to false.");
+        console.log("onAuthStateChange: Setting isSessionLoading to false.");
         setIsSessionLoading(false);
       }
     });
 
     return () => {
-      console.log("Unsubscribing from onAuthStateChange.");
+      console.log("onAuthStateChange: Unsubscribing from listener.");
       subscription.unsubscribe();
     };
   }, []);
@@ -200,18 +213,21 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!authState.isAuthenticated) return;
 
-    const recordsChannel = supabase.channel('public:attendance_records').on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_records' }, () => fetchRecords()).subscribe();
-    const employeesChannel = supabase.channel('public:employees').on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => fetchEmployees()).subscribe();
+    console.log("Realtime: Setting up channels for authenticated user.");
+    const recordsChannel = supabase.channel('public:attendance_records').on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_records' }, () => { console.log("Realtime: attendance_records change, refetching."); fetchRecords(); }).subscribe();
+    const employeesChannel = supabase.channel('public:employees').on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => { console.log("Realtime: employees change, refetching."); fetchEmployees(); }).subscribe();
     const profilesChannel = supabase.channel('public:profiles').on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+      console.log("Realtime: profiles change, refreshing user and fetching users.");
       refreshUser(); // Para el perfil del usuario actual
       fetchUsers(); // Para la lista de usuarios en UserManagement
     }).subscribe();
-    const leaveRequestsChannel = supabase.channel('public:leave_requests').on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => fetchLeaveRequests()).subscribe();
-    const rolesChannel = supabase.channel('public:roles').on('postgres_changes', { event: '*', schema: 'public', table: 'roles' }, () => refreshUser()).subscribe(); // Refresh user if roles change
-    const rolePermissionsChannel = supabase.channel('public:role_permissions').on('postgres_changes', { event: '*', schema: 'public', table: 'role_permissions' }, () => refreshUser()).subscribe(); // Refresh user if role permissions change
+    const leaveRequestsChannel = supabase.channel('public:leave_requests').on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => { console.log("Realtime: leave_requests change, refetching."); fetchLeaveRequests(); }).subscribe();
+    const rolesChannel = supabase.channel('public:roles').on('postgres_changes', { event: '*', schema: 'public', table: 'roles' }, () => { console.log("Realtime: roles change, refreshing user."); refreshUser(); }).subscribe(); // Refresh user if roles change
+    const rolePermissionsChannel = supabase.channel('public:role_permissions').on('postgres_changes', { event: '*', schema: 'public', table: 'role_permissions' }, () => { console.log("Realtime: role_permissions change, refreshing user."); refreshUser(); }).subscribe(); // Refresh user if role permissions change
 
 
     return () => {
+      console.log("Realtime: Unsubscribing from channels.");
       supabase.removeChannel(recordsChannel);
       supabase.removeChannel(employeesChannel);
       supabase.removeChannel(profilesChannel);
@@ -222,6 +238,7 @@ const App: React.FC = () => {
   }, [authState.isAuthenticated, fetchRecords, fetchEmployees, refreshUser, authState.user?.id, fetchLeaveRequests, fetchUsers]);
 
   const logout = useCallback(async () => {
+    console.log("logout: Signing out user.");
     await supabase.auth.signOut();
     setAuthState({ isAuthenticated: false, user: null });
   }, []);
@@ -234,7 +251,7 @@ const App: React.FC = () => {
     });
 
     if (error) {
-      console.error("Error en RPC register_attendance:", error);
+      console.error("addRecord: Error in RPC register_attendance:", error);
       return { success: false, message: 'Error al procesar el registro.' };
     }
     
@@ -266,6 +283,10 @@ const App: React.FC = () => {
 
 const AppRoutes = () => {
   const { authState, isSessionLoading, isAppDataLoading } = React.useContext(AppContext)!;
+
+  console.log("AppRoutes: Current authState:", authState);
+  console.log("AppRoutes: isSessionLoading:", isSessionLoading);
+  console.log("AppRoutes: isAppDataLoading:", isAppDataLoading);
 
   if (isSessionLoading || isAppDataLoading) { // Usar ambos estados de carga
     return <div className="min-h-screen flex items-center justify-center bg-slate-900"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>;
