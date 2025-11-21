@@ -1,25 +1,21 @@
-import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
-import { QrCode, User as UserIcon, LogIn, LogOut, AlertCircle, Shield } from 'lucide-react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
+import { QrCode, User as UserIcon, LogIn, LogOut, AlertCircle, Shield, CameraOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AppContext } from '../App';
 import { Button, Card } from '../components/UIComponents';
 import { Employee } from '../types';
 import toast from 'react-hot-toast';
-import { QrScannerModal } from '../src/components/QrScannerModal';
+import { QRScanner } from '../src/components/QRScanner';
 import { supabase } from '../src/integrations/supabase/client';
 
 const AccessTerminal: React.FC = () => {
-  const { addRecord, records } = useContext(AppContext)!;
+  const { addRecord } = useContext(AppContext)!;
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mode, setMode] = useState<'scan' | 'manual'>('scan');
   const [cedulaInput, setCedulaInput] = useState('');
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string, employee?: Employee }>({ type: 'idle', message: '' });
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
-  
-  // --- NUEVA LÓGICA ---
-  // 1. "Área de espera" para el código escaneado
-  const [scannedCedula, setScannedCedula] = useState<string | null>(null);
+  const [scannerError, setScannerError] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -56,45 +52,45 @@ const AccessTerminal: React.FC = () => {
     }
   }, [addRecord, isProcessing]);
   
-  // 2. La función de escaneo ahora es súper simple: solo guarda el dato.
-  const handleScan = useCallback((data: string) => {
-    setScannedCedula(data);
-    setIsScannerOpen(false);
-  }, []);
+  const handleScanSuccess = useCallback(async (cedula: string) => {
+    if (isProcessing) return;
 
-  // 3. El "vigilante" que procesa el dato cuando llega.
-  useEffect(() => {
-    const processScannedCode = async () => {
-      if (!scannedCedula) return;
+    const today = new Date().toISOString().split('T')[0];
+    const { data: employee, error: empError } = await supabase.from('employees').select('id').eq('cedula', cedula).single();
+    if (empError || !employee) {
+      setStatus({ type: 'error', message: 'Empleado no encontrado' });
+      toast.error('Empleado no encontrado');
+      return;
+    }
 
-      const { data: employee, error } = await supabase.from('employees').select('id').eq('cedula', scannedCedula).single();
-      if (error || !employee) {
-        setStatus({ type: 'error', message: 'Empleado no encontrado' });
-        toast.error('Empleado no encontrado');
-        setScannedCedula(null); // Limpiar el área de espera
-        return;
-      }
+    const { data: todaysRecords, error: recError } = await supabase
+      .from('attendance_records')
+      .select('tipo')
+      .eq('employee_id', employee.id)
+      .eq('fecha', today);
 
-      const lastRecord = records
-        .filter(r => r.employee_id === employee.id)
-        .sort((a, b) => new Date(`${b.fecha}T${b.hora}`).getTime() - new Date(`${a.fecha}T${a.hora}`).getTime())[0];
-        
-      const type = !lastRecord || lastRecord.tipo === 'salida' ? 'entrada' : 'salida';
-      
-      await processAccess(scannedCedula, type, 'qr');
-      setScannedCedula(null); // Limpiar el área de espera
-    };
+    if (recError) {
+      setStatus({ type: 'error', message: 'Error al verificar registros' });
+      return;
+    }
 
-    processScannedCode();
-  }, [scannedCedula, records, processAccess]);
+    const hasEntrada = todaysRecords.some(r => r.tipo === 'entrada');
+    const nextAction = hasEntrada ? 'salida' : 'entrada';
+    
+    await processAccess(cedula, nextAction, 'qr');
+  }, [processAccess, isProcessing]);
+
+  const handleScanFailure = (error: string) => {
+    console.error(`QR Scanner Error: ${error}`);
+    if (error.toLowerCase().includes('permission')) {
+      setScannerError('Permiso de cámara denegado. Por favor, habilítelo en su navegador.');
+    } else {
+      setScannerError('No se pudo iniciar la cámara. Verifique los permisos y que no esté en uso.');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col relative overflow-hidden">
-      <QrScannerModal 
-        isOpen={isScannerOpen}
-        onClose={() => setIsScannerOpen(false)}
-        onScan={handleScan}
-      />
       <header className="relative z-10 p-4 sm:p-6 flex justify-between items-center border-b border-white/10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center shrink-0">
@@ -145,12 +141,16 @@ const AccessTerminal: React.FC = () => {
               ) : null}
               
               {mode === 'scan' ? (
-                <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-                  <div className="relative w-64 h-64 border-2 border-blue-500/50 rounded-3xl flex items-center justify-center mb-6 bg-black/50">
-                    <QrCode className="w-24 h-24 text-white/10" />
-                    <p className="absolute bottom-4 text-xs text-blue-400">APUNTE EL CÓDIGO QR</p>
-                  </div>
-                  <Button onClick={() => setIsScannerOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg py-3 px-8">Escanear</Button>
+                <div className="p-4">
+                  {scannerError ? (
+                    <div className="text-center text-red-400 bg-red-900/50 p-6 rounded-lg">
+                      <CameraOff size={48} className="mx-auto mb-4" />
+                      <h3 className="font-bold mb-2">Error de Cámara</h3>
+                      <p className="text-sm">{scannerError}</p>
+                    </div>
+                  ) : (
+                    <QRScanner onScanSuccess={handleScanSuccess} onScanFailure={handleScanFailure} />
+                  )}
                 </div>
               ) : (
                 <div className="p-8">
@@ -169,9 +169,9 @@ const AccessTerminal: React.FC = () => {
           <div className="hidden lg:block space-y-8 text-slate-300">
             <h2 className="text-3xl font-bold text-white mb-4">Instrucciones</h2>
             <ul className="space-y-4">
-              <li className="flex items-start gap-4"><div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold shrink-0">1</div><p className="mt-1">Presione "Escanear" y autorice el uso de la cámara.</p></li>
+              <li className="flex items-start gap-4"><div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold shrink-0">1</div><p className="mt-1">Seleccione el modo "Escáner QR".</p></li>
               <li className="flex items-start gap-4"><div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold shrink-0">2</div><p className="mt-1">Alinee el código QR del empleado dentro del visor.</p></li>
-              <li className="flex items-start gap-4"><div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold shrink-0">3</div><p className="mt-1">El sistema registrará el acceso automáticamente.</p></li>
+              <li className="flex items-start gap-4"><div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold shrink-0">3</div><p className="mt-1">El sistema registrará la entrada o salida automáticamente.</p></li>
             </ul>
           </div>
         </div>

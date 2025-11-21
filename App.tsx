@@ -134,6 +134,26 @@ const App: React.FC = () => {
     const { data: employee, error: empError } = await supabase.from('employees').select('*').eq('cedula', cedula).single();
     if (empError || !employee) return { success: false, message: 'Empleado no encontrado' };
 
+    const today = new Date().toISOString().split('T')[0];
+    const { data: todaysRecords, error: recordsError } = await supabase
+      .from('attendance_records')
+      .select('tipo')
+      .eq('employee_id', employee.id)
+      .eq('fecha', today);
+
+    if (recordsError) return { success: false, message: 'Error al verificar registros' };
+
+    const hasEntrada = todaysRecords.some(r => r.tipo === 'entrada');
+    const hasSalida = todaysRecords.some(r => r.tipo === 'salida');
+
+    if (tipo === 'entrada' && hasEntrada) {
+      return { success: false, message: 'Ya se registró una entrada hoy' };
+    }
+    if (tipo === 'salida') {
+      if (!hasEntrada) return { success: false, message: 'Debe registrar entrada primero' };
+      if (hasSalida) return { success: false, message: 'Ya se registró una salida hoy' };
+    }
+
     const now = new Date();
     const currentTime = now.toTimeString().slice(0, 8);
 
@@ -144,7 +164,7 @@ const App: React.FC = () => {
       isLate = actualEntryTime > scheduleEntryTime;
     }
 
-    const { error } = await supabase.from('attendance_records').insert({ employee_id: employee.id, tipo, metodo, tardanza: isLate, fecha: now.toISOString().split('T')[0], hora: currentTime });
+    const { error } = await supabase.from('attendance_records').insert({ employee_id: employee.id, tipo, metodo, tardanza: isLate, fecha: today, hora: currentTime });
     if (error) return { success: false, message: 'Error al registrar el acceso' };
     return { success: true, message: `Registro exitoso: ${tipo.toUpperCase()}`, employee };
   }, []);

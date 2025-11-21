@@ -23,6 +23,9 @@ importers:
       '@yudiel/react-qr-scanner':
         specifier: ^2.0.4
         version: 2.4.1(@types/emscripten@1.41.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      html5-qrcode:
+        specifier: ^2.3.8
+        version: 2.3.8
       lucide-react:
         specifier: ^0.554.0
         version: 0.554.0(react@18.3.1)
@@ -791,6 +794,9 @@ packages:
   gtoken@8.0.0:
     resolution: {integrity: sha512-+CqsMbHPiSTdtSO14O51eMNlrp9N79gmeqmXeouJOhfucAedHw9noVe/n5uJk3tbKE6a+6ZCQg3RPhVhHByAIw==}
     engines: {node: '>=18'}
+
+  html5-qrcode@2.3.8:
+    resolution: {integrity: sha512-jsr4vafJhwoLVEDW3n1KvPnCCXWaQfRng0/EEYk1vNcQGcG/htAdhJX0be8YyqMoSz7+hZvOZSTAepsabiuhiQ==}
 
   https-proxy-agent@7.0.6:
     resolution: {integrity: sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw==}
@@ -1839,6 +1845,8 @@ snapshots:
       jws: 4.0.0
     transitivePeerDependencies:
       - supports-color
+
+  html5-qrcode@2.3.8: {}
 
   https-proxy-agent@7.0.6:
     dependencies:
