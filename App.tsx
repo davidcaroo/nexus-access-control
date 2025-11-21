@@ -44,28 +44,52 @@ const App: React.FC = () => {
   const fetchEmployees = useCallback(async () => {
     const { data, error } = await supabase.from('employees').select('*').order('nombre', { ascending: true });
     if (!error) setEmployees(data || []);
+    else console.error("Error fetching employees:", error);
   }, []);
 
   const fetchRecords = useCallback(async () => {
     const { data, error } = await supabase.from('attendance_records').select('*').order('created_at', { ascending: false });
     if (!error) setRecords(data || []);
+    else console.error("Error fetching records:", error);
   }, []);
 
   const refreshUser = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession();
+    console.log("Refreshing user session...");
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      console.error("Error getting session during refresh:", sessionError);
+      setAuthState({ isAuthenticated: false, user: null });
+      return;
+    }
+
     if (session?.user) {
-      const { data: profile } = await supabase.from('profiles').select('*, roles(name)').eq('id', session.user.id).single();
-      if (profile) {
+      const { data: profile, error: profileError } = await supabase.from('profiles').select('*, roles(name)').eq('id', session.user.id).single();
+      
+      if (profileError) {
+        console.error("Error fetching profile during refresh:", profileError);
+        setAuthState({ isAuthenticated: false, user: null });
+        return;
+      }
+
+      const roleName = (profile?.roles as { name: string } | null)?.name; // Acceso seguro a la propiedad anidada
+      if (profile && roleName && (roleName === 'admin' || roleName === 'superadmin')) {
         const user: User = {
           id: session.user.id,
           email: session.user.email,
           full_name: profile.full_name,
-          // @ts-ignore
-          role: profile.roles.name,
+          role: roleName,
           avatar_url: profile.avatar_url,
         };
         setAuthState({ isAuthenticated: true, user });
+        console.log("User refreshed and authenticated:", user.full_name);
+      } else {
+        console.log("User role not admin/superadmin or profile/role missing during refresh. Signing out.");
+        await supabase.auth.signOut();
+        setAuthState({ isAuthenticated: false, user: null });
       }
+    } else {
+      console.log("No session user found during refresh.");
+      setAuthState({ isAuthenticated: false, user: null });
     }
   }, []);
 
@@ -77,38 +101,53 @@ const App: React.FC = () => {
   }, [authState.isAuthenticated, fetchEmployees, fetchRecords]);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    console.log("Setting up onAuthStateChange listener...");
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("onAuthStateChange event:", event, "session:", session);
       try {
         if (session) {
-          const { data: profile } = await supabase.from('profiles').select('*, roles(name)').eq('id', session.user.id).single();
+          console.log("Session found, fetching profile for user:", session.user.id);
+          const { data: profile, error: profileError } = await supabase.from('profiles').select('*, roles(name)').eq('id', session.user.id).single();
           
-          // @ts-ignore
-          if (profile && profile.roles && (profile.roles.name === 'admin' || profile.roles.name === 'superadmin')) {
+          if (profileError) {
+            console.error("Error fetching profile:", profileError);
+            throw profileError; // Re-throw to catch block
+          }
+          console.log("Profile data:", profile);
+
+          const roleName = (profile?.roles as { name: string } | null)?.name; // Acceso seguro a la propiedad anidada
+          if (profile && roleName && (roleName === 'admin' || roleName === 'superadmin')) {
+            console.log("User is admin/superadmin.");
             const user: User = {
               id: session.user.id,
               email: session.user.email,
               full_name: profile.full_name,
-              // @ts-ignore
-              role: profile.roles.name,
+              role: roleName,
               avatar_url: profile.avatar_url,
             };
             setAuthState({ isAuthenticated: true, user });
           } else {
+            console.log("User role not admin/superadmin or profile/role missing. Signing out.");
             await supabase.auth.signOut();
             setAuthState({ isAuthenticated: false, user: null });
           }
         } else {
+          console.log("No session found.");
           setAuthState({ isAuthenticated: false, user: null });
         }
       } catch (error) {
         console.error("Error handling auth state change:", error);
         setAuthState({ isAuthenticated: false, user: null });
       } finally {
+        console.log("Setting isSessionLoading to false.");
         setIsSessionLoading(false);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      console.log("Unsubscribing from onAuthStateChange.");
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
