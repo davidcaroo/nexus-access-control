@@ -21,13 +21,14 @@ const verifySuperAdmin = async (req: Request, supabaseAdmin: SupabaseClient) => 
   const { data: { user } } = await supabaseAdmin.auth.getUser(token)
   if (!user) throw new Error('Invalid token')
   
+  // Obtener el rol del perfil del usuario, haciendo join con la tabla roles
   const { data: profile, error } = await supabaseAdmin
     .from('profiles')
-    .select('role')
+    .select('role_id, roles(name)')
     .eq('id', user.id)
     .single()
   
-  if (error || !profile || profile.role !== 'superadmin') {
+  if (error || !profile || (profile.roles as { name: string } | null)?.name !== 'superadmin') {
     throw new Error('Permission denied. Not a superadmin.')
   }
   return user
@@ -46,17 +47,20 @@ serve(async (req) => {
       case 'GET': {
         const { data: { users }, error: usersError } = await supabaseAdmin.auth.admin.listUsers()
         if (usersError) throw usersError
-        const { data: profiles, error: profilesError } = await supabaseAdmin.from('profiles').select('*')
+        
+        // Obtener perfiles con el nombre del rol
+        const { data: profiles, error: profilesError } = await supabaseAdmin.from('profiles').select('*, roles(name)')
         if (profilesError) throw profilesError
 
         const combinedUsers = users.map(u => {
           const profile = profiles.find(p => p.id === u.id)
           const bannedUntil = u.banned_until || '1970-01-01T00:00:00Z';
+          const roleName = (profile?.roles as { name: string } | null)?.name || 'employee'; // Acceso seguro al nombre del rol
           return {
             id: u.id,
             email: u.email,
             full_name: profile?.full_name || '',
-            role: profile?.role || 'employee',
+            role: roleName,
             created_at: u.created_at,
             is_banned: new Date(bannedUntil) > new Date(),
           }
@@ -65,6 +69,16 @@ serve(async (req) => {
       }
       case 'POST': {
         const { email, password, full_name, role } = await req.json()
+
+        // Obtener el role_id basado en el nombre del rol
+        const { data: roleData, error: roleError } = await supabaseAdmin
+            .from('roles')
+            .select('id')
+            .eq('name', role)
+            .single();
+        if (roleError || !roleData) throw new Error('Role not found');
+        const roleId = roleData.id;
+
         const { data, error } = await supabaseAdmin.auth.admin.createUser({
           email,
           password,
@@ -75,7 +89,7 @@ serve(async (req) => {
         
         const { error: profileError } = await supabaseAdmin
           .from('profiles')
-          .update({ role })
+          .update({ role_id: roleId }) // Actualizar role_id, no 'role'
           .eq('id', data.user.id)
         if (profileError) {
           await supabaseAdmin.auth.admin.deleteUser(data.user.id)
@@ -89,7 +103,17 @@ serve(async (req) => {
         // --- Profile Update Logic ---
         const profileUpdatePayload: any = {};
         if (typeof full_name !== 'undefined') profileUpdatePayload.full_name = full_name;
-        if (typeof role !== 'undefined') profileUpdatePayload.role = role;
+        
+        if (typeof role !== 'undefined') {
+            // Obtener el role_id basado en el nombre del rol
+            const { data: roleData, error: roleError } = await supabaseAdmin
+                .from('roles')
+                .select('id')
+                .eq('name', role)
+                .single();
+            if (roleError || !roleData) throw new Error('Role not found');
+            profileUpdatePayload.role_id = roleData.id; // Actualizar role_id, no 'role'
+        }
 
         if (Object.keys(profileUpdatePayload).length > 0) {
             const { error: profileError } = await supabaseAdmin
