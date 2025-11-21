@@ -20,18 +20,19 @@ import UserManagement from './src/pages/UserManagement';
 import OvertimeReport from './pages/OvertimeReport';
 import Settings from './src/pages/Settings';
 import PublicLeaveRequest from './src/pages/PublicLeaveRequest';
-import LeaveRequestsManagement from './src/pages/LeaveRequestsManagement'; // Importar la nueva página
+import LeaveRequestsManagement from './src/pages/LeaveRequestsManagement';
 
 // Context for global state
 export const AppContext = React.createContext<{
   authState: AuthState;
   employees: Employee[];
   records: AttendanceRecord[];
-  leaveRequests: LeaveRequest[]; // Añadir leaveRequests al contexto
+  leaveRequests: LeaveRequest[];
   isSessionLoading: boolean;
+  isAppDataLoading: boolean; // Nuevo estado de carga de datos de la aplicación
   fetchEmployees: () => void;
   fetchRecords: () => void;
-  fetchLeaveRequests: () => void; // Añadir fetchLeaveRequests al contexto
+  fetchLeaveRequests: () => void;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   addRecord: (cedula: string, metodo: 'manual' | 'qr', tipo?: 'entrada' | 'salida') => Promise<{ success: boolean; message: string; employee?: Employee }>;
@@ -43,8 +44,9 @@ const App: React.FC = () => {
   const [authState, setAuthState] = useState<AuthState>({ isAuthenticated: false, user: null });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]); // Nuevo estado para solicitudes de ausencia
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
+  const [isAppDataLoading, setIsAppDataLoading] = useState(false); // Inicializar en false
 
   const fetchEmployees = useCallback(async () => {
     const { data, error } = await supabase.from('employees').select('*').order('nombre', { ascending: true });
@@ -82,7 +84,7 @@ const App: React.FC = () => {
         return;
       }
 
-      const roleName = (profile?.roles as { name: string } | null)?.name; // Acceso seguro a la propiedad anidada
+      const roleName = (profile?.roles as { name: string } | null)?.name;
       if (profile && roleName && (roleName === 'admin' || roleName === 'superadmin')) {
         const user: User = {
           id: session.user.id,
@@ -104,12 +106,20 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Cargar datos de la aplicación cuando el usuario se autentica
   useEffect(() => {
-    if (authState.isAuthenticated) {
-      fetchEmployees();
-      fetchRecords();
-      fetchLeaveRequests(); // Cargar solicitudes de ausencia al autenticarse
-    }
+    const loadAppData = async () => {
+      if (authState.isAuthenticated) {
+        setIsAppDataLoading(true);
+        await Promise.all([
+          fetchEmployees(),
+          fetchRecords(),
+          fetchLeaveRequests()
+        ]);
+        setIsAppDataLoading(false);
+      }
+    };
+    loadAppData();
   }, [authState.isAuthenticated, fetchEmployees, fetchRecords, fetchLeaveRequests]);
 
   useEffect(() => {
@@ -123,11 +133,11 @@ const App: React.FC = () => {
           
           if (profileError) {
             console.error("Error fetching profile:", profileError);
-            throw profileError; // Re-throw to catch block
+            throw profileError;
           }
           console.log("Profile data:", profile);
 
-          const roleName = (profile?.roles as { name: string } | null)?.name; // Acceso seguro a la propiedad anidada
+          const roleName = (profile?.roles as { name: string } | null)?.name;
           if (profile && roleName && (roleName === 'admin' || roleName === 'superadmin')) {
             console.log("User is admin/superadmin.");
             const user: User = {
@@ -168,13 +178,13 @@ const App: React.FC = () => {
     const recordsChannel = supabase.channel('public:attendance_records').on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_records' }, () => fetchRecords()).subscribe();
     const employeesChannel = supabase.channel('public:employees').on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => fetchEmployees()).subscribe();
     const profilesChannel = supabase.channel('public:profiles').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${authState.user?.id}` }, () => refreshUser()).subscribe();
-    const leaveRequestsChannel = supabase.channel('public:leave_requests').on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => fetchLeaveRequests()).subscribe(); // Suscribirse a cambios en solicitudes de ausencia
+    const leaveRequestsChannel = supabase.channel('public:leave_requests').on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => fetchLeaveRequests()).subscribe();
 
     return () => {
       supabase.removeChannel(recordsChannel);
       supabase.removeChannel(employeesChannel);
       supabase.removeChannel(profilesChannel);
-      supabase.removeChannel(leaveRequestsChannel); // Limpiar suscripción
+      supabase.removeChannel(leaveRequestsChannel);
     };
   }, [authState.isAuthenticated, fetchRecords, fetchEmployees, refreshUser, authState.user?.id, fetchLeaveRequests]);
 
@@ -209,7 +219,7 @@ const App: React.FC = () => {
     return { error };
   }, []);
 
-  const contextValue = useMemo(() => ({ authState, employees, records, leaveRequests, isSessionLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, refreshUser }), [authState, employees, records, leaveRequests, isSessionLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, refreshUser]);
+  const contextValue = useMemo(() => ({ authState, employees, records, leaveRequests, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, refreshUser }), [authState, employees, records, leaveRequests, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, refreshUser]);
 
   return (
     <AppContext.Provider value={contextValue}>
@@ -222,9 +232,9 @@ const App: React.FC = () => {
 };
 
 const AppRoutes = () => {
-  const { authState, isSessionLoading } = React.useContext(AppContext)!;
+  const { authState, isSessionLoading, isAppDataLoading } = React.useContext(AppContext)!;
 
-  if (isSessionLoading) {
+  if (isSessionLoading || isAppDataLoading) { // Usar ambos estados de carga
     return <div className="min-h-screen flex items-center justify-center bg-slate-900"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>;
   }
 
@@ -240,7 +250,7 @@ const AppRoutes = () => {
         <Route element={<ProtectedRoute permission="employees:view" />}>
           <Route path="employees" element={<EmployeeManager />} />
         </Route>
-        <Route element={<ProtectedRoute permission="leave_requests:view" />}> {/* Nueva ruta protegida */}
+        <Route element={<ProtectedRoute permission="leave_requests:view" />}>
           <Route path="leave-requests" element={<LeaveRequestsManagement />} />
         </Route>
         <Route element={<ProtectedRoute permission="overtime:view" />}>

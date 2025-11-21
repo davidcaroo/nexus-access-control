@@ -9,11 +9,9 @@ import { LeaveRequest } from '../../types';
 import { usePermissions } from '../context/PermissionsContext';
 
 const LeaveRequestsManagement: React.FC = () => {
-  const { employees, authState, fetchEmployees, leaveRequests, fetchLeaveRequests } = useContext(AppContext)!;
+  const { employees, authState, fetchEmployees, leaveRequests, fetchLeaveRequests, isAppDataLoading } = useContext(AppContext)!;
   const { can } = usePermissions();
-  // Usamos un estado de carga local para la primera vez que se monta el componente
-  // Después, dependemos de los datos del contexto que se actualizan en tiempo real.
-  const [initialLoading, setInitialLoading] = useState(true); 
+  
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -23,17 +21,12 @@ const LeaveRequestsManagement: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
 
+  // Cargar empleados si no están disponibles (aunque App.tsx ya los carga)
   useEffect(() => {
-    const loadData = async () => {
-      setInitialLoading(true);
-      await fetchLeaveRequests(); // Cargar las solicitudes iniciales desde el contexto
-      if (employees.length === 0) {
-        await fetchEmployees(); // Asegurarse de que los empleados estén cargados
-      }
-      setInitialLoading(false);
-    };
-    loadData();
-  }, [fetchLeaveRequests, fetchEmployees, employees.length]); // Dependencias para recargar si cambian
+    if (employees.length === 0 && !isAppDataLoading) {
+      fetchEmployees();
+    }
+  }, [employees.length, fetchEmployees, isAppDataLoading]);
 
   const getEmployeeName = (employeeId: string) => {
     const employee = employees.find(emp => emp.id === employeeId);
@@ -113,7 +106,7 @@ const LeaveRequestsManagement: React.FC = () => {
     }
   };
 
-  if (initialLoading) {
+  if (isAppDataLoading) { // Usar el estado de carga global
     return <div className="text-center py-12 text-gray-500">Cargando solicitudes...</div>;
   }
 
