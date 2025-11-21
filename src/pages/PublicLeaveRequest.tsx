@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Input, Card } from '../components/UIComponents';
+import { Button, Input, Card } from '../../components/UIComponents'; // Ruta corregida
 import { supabase } from '../integrations/supabase/client';
 import toast from 'react-hot-toast';
 import { CalendarDays, User, Mail } from 'lucide-react';
