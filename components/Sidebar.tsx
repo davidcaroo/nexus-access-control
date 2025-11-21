@@ -36,7 +36,7 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({ to, icon, label, target }) =>
 export const Sidebar: React.FC = () => {
   const { logout, authState } = React.useContext(AppContext)!;
   const { isCollapsed, toggleCollapse, isMobileOpen, closeMobileSidebar } = useSidebar();
-  const { can }_usePermissions();
+  const { can } = usePermissions();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
