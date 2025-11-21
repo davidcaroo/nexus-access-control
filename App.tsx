@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { User, Employee, AttendanceRecord, AuthState, LeaveRequest } from './types';
+import { User, Employee, AttendanceRecord, AuthState, LeaveRequest, ManagedUser } from './types';
 import { Layout } from './components/Layout';
 import { supabase } from './src/integrations/supabase/client';
 import { ToastProvider } from './src/components/ToastProvider';
@@ -28,11 +28,13 @@ export const AppContext = React.createContext<{
   employees: Employee[];
   records: AttendanceRecord[];
   leaveRequests: LeaveRequest[];
+  users: ManagedUser[]; // Añadido: Lista de usuarios gestionados
   isSessionLoading: boolean;
-  isAppDataLoading: boolean; // Nuevo estado de carga de datos de la aplicación
+  isAppDataLoading: boolean;
   fetchEmployees: () => void;
   fetchRecords: () => void;
   fetchLeaveRequests: () => void;
+  fetchUsers: () => Promise<void>; // Añadido: Función para cargar usuarios
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   addRecord: (cedula: string, metodo: 'manual' | 'qr', tipo?: 'entrada' | 'salida') => Promise<{ success: boolean; message: string; employee?: Employee }>;
@@ -45,8 +47,9 @@ const App: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [users, setUsers] = useState<ManagedUser[]>([]); // Nuevo estado para usuarios
   const [isSessionLoading, setIsSessionLoading] = useState(true);
-  const [isAppDataLoading, setIsAppDataLoading] = useState(false); // Inicializar en false
+  const [isAppDataLoading, setIsAppDataLoading] = useState(false);
 
   const fetchEmployees = useCallback(async () => {
     const { data, error } = await supabase.from('employees').select('*').order('nombre', { ascending: true });
@@ -65,6 +68,26 @@ const App: React.FC = () => {
     if (!error) setLeaveRequests(data || []);
     else console.error("Error fetching leave requests:", error);
   }, []);
+
+  // Nueva función para cargar usuarios desde la función Edge
+  const fetchUsers = useCallback(async () => {
+    // Solo intentar cargar usuarios si el usuario actual es un superadmin
+    if (!authState.isAuthenticated || authState.user?.role !== 'superadmin') {
+      setUsers([]); // Limpiar usuarios si no está autorizado
+      return;
+    }
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('manage-users', {
+        method: 'GET',
+      });
+      if (invokeError) throw invokeError;
+      if (data.error) throw new Error(data.error);
+      setUsers(data);
+    } catch (err: any) {
+      console.error("Error fetching users from edge function:", err.message);
+      setUsers([]); // Limpiar usuarios en caso de error
+    }
+  }, [authState.isAuthenticated, authState.user?.role]); // Dependencias para estabilidad
 
   const refreshUser = useCallback(async () => {
     console.log("Refreshing user session...");
@@ -114,13 +137,14 @@ const App: React.FC = () => {
         await Promise.all([
           fetchEmployees(),
           fetchRecords(),
-          fetchLeaveRequests()
+          fetchLeaveRequests(),
+          fetchUsers() // Incluir la carga de usuarios aquí
         ]);
         setIsAppDataLoading(false);
       }
     };
     loadAppData();
-  }, [authState.isAuthenticated, fetchEmployees, fetchRecords, fetchLeaveRequests]);
+  }, [authState.isAuthenticated, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers]);
 
   useEffect(() => {
     console.log("Setting up onAuthStateChange listener...");
@@ -177,7 +201,10 @@ const App: React.FC = () => {
 
     const recordsChannel = supabase.channel('public:attendance_records').on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_records' }, () => fetchRecords()).subscribe();
     const employeesChannel = supabase.channel('public:employees').on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => fetchEmployees()).subscribe();
-    const profilesChannel = supabase.channel('public:profiles').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${authState.user?.id}` }, () => refreshUser()).subscribe();
+    const profilesChannel = supabase.channel('public:profiles').on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+      refreshUser(); // Para el perfil del usuario actual
+      fetchUsers(); // Para la lista de usuarios en UserManagement
+    }).subscribe();
     const leaveRequestsChannel = supabase.channel('public:leave_requests').on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => fetchLeaveRequests()).subscribe();
 
     return () => {
@@ -186,7 +213,7 @@ const App: React.FC = () => {
       supabase.removeChannel(profilesChannel);
       supabase.removeChannel(leaveRequestsChannel);
     };
-  }, [authState.isAuthenticated, fetchRecords, fetchEmployees, refreshUser, authState.user?.id, fetchLeaveRequests]);
+  }, [authState.isAuthenticated, fetchRecords, fetchEmployees, refreshUser, authState.user?.id, fetchLeaveRequests, fetchUsers]);
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
@@ -219,7 +246,7 @@ const App: React.FC = () => {
     return { error };
   }, []);
 
-  const contextValue = useMemo(() => ({ authState, employees, records, leaveRequests, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, refreshUser }), [authState, employees, records, leaveRequests, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, refreshUser]);
+  const contextValue = useMemo(() => ({ authState, employees, records, leaveRequests, users, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers, refreshUser }), [authState, employees, records, leaveRequests, users, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers, refreshUser]);
 
   return (
     <AppContext.Provider value={contextValue}>

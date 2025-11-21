@@ -8,6 +8,13 @@ export interface User {
   avatar_url?: string;
 }
 
+// Nueva interfaz para usuarios gestionados, incluyendo email y estado de bloqueo
+export interface ManagedUser extends User {
+  email: string;
+  is_banned: boolean;
+  created_at: string; // Añadir created_at para consistencia con la respuesta de la función edge
+}
+
 export interface Employee {
   id: string;
   cedula: string;

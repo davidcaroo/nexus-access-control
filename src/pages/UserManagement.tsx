@@ -1,20 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { supabase } from '../integrations/supabase/client';
-import { User, Role } from '../../types';
+import { ManagedUser, Role } from '../../types'; // Importar ManagedUser
 import { Card, Button, Badge, Input } from '../../components/UIComponents';
 import { Plus, Edit, Trash2, X, UserX, UserCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfirmationModal } from '../components/ConfirmationModal';
-
-interface ManagedUser extends User {
-  email: string;
-  is_banned: boolean;
-}
+import { AppContext } from '../../App'; // Importar AppContext
 
 const UserManagement: React.FC = () => {
-  const [users, setUsers] = useState<ManagedUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { users, isAppDataLoading, fetchUsers } = useContext(AppContext)!; // Obtener users, isAppDataLoading y fetchUsers del contexto
   
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -35,28 +29,9 @@ const UserManagement: React.FC = () => {
   const [userToBan, setUserToBan] = useState<ManagedUser | null>(null);
   const [isBanning, setIsBanning] = useState(false);
 
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data, error: invokeError } = await supabase.functions.invoke('manage-users', {
-        method: 'GET',
-      });
-      if (invokeError) throw invokeError;
-      if (data.error) throw new Error(data.error);
-      setUsers(data);
-    } catch (err: any) {
-      const errorMessage = err.message || 'No se pudieron cargar los usuarios. Solo los superadministradores pueden ver esta página.';
-      setError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+  // No necesitamos un fetchUsers local ni un estado 'loading' para la lista de usuarios,
+  // ya que App.tsx se encarga de la carga inicial y las actualizaciones en tiempo real.
+  // El estado 'isAppDataLoading' del contexto nos indica si los datos están cargando.
 
   const handleOpenModal = (user?: ManagedUser) => {
     if (user) {
@@ -66,7 +41,7 @@ const UserManagement: React.FC = () => {
         full_name: user.full_name,
         email: user.email,
         password: '',
-        role: user.role,
+        role: user.role as Role, // Asegurar el tipo Role
       });
     } else {
       setIsEditing(false);
@@ -101,7 +76,7 @@ const UserManagement: React.FC = () => {
       if (invokeError) throw invokeError;
       if (data?.error) throw new Error(data.error);
       toast.success(`Usuario ${isEditing ? 'actualizado' : 'creado'} correctamente.`);
-      fetchUsers();
+      await fetchUsers(); // Refrescar la lista de usuarios desde el contexto
       handleCloseModal();
     } catch (err: any) {
       toast.error(err.message || 'Error al guardar el usuario.');
@@ -125,7 +100,7 @@ const UserManagement: React.FC = () => {
       });
       if (invokeError) throw invokeError;
       toast.success('Usuario eliminado correctamente.');
-      fetchUsers();
+      await fetchUsers(); // Refrescar la lista de usuarios desde el contexto
       setIsDeleteModalOpen(false);
       setUserToDelete(null);
     } catch (err: any) {
@@ -152,7 +127,7 @@ const UserManagement: React.FC = () => {
       if (invokeError) throw invokeError;
       if (data?.error) throw new Error(data.error);
       toast.success(`Usuario ${action === 'bloquear' ? 'bloqueado' : 'desbloqueado'} correctamente.`);
-      fetchUsers();
+      await fetchUsers(); // Refrescar la lista de usuarios desde el contexto
     } catch (err: any) {
       toast.error(err.message || `Error al ${action} el usuario.`);
     } finally {
@@ -162,8 +137,11 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  if (loading) return <div>Cargando usuarios...</div>;
-  if (error) return <div className="text-red-500 bg-red-100 p-4 rounded-lg">{error}</div>;
+  if (isAppDataLoading) return <div>Cargando usuarios...</div>; // Usar el estado de carga global
+  // Si no hay usuarios y no está cargando, podría ser un error de permisos o que no hay usuarios.
+  // El error ya se maneja en App.tsx y se loguea. Aquí solo mostramos un mensaje si la lista está vacía.
+  if (users.length === 0) return <div className="text-red-500 bg-red-100 p-4 rounded-lg">No se pudieron cargar los usuarios o no hay usuarios disponibles. Solo los superadministradores pueden ver esta página.</div>;
+
 
   return (
     <div className="space-y-6">
