@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { Camera } from 'lucide-react';
 
 interface QRScannerProps {
@@ -10,58 +10,51 @@ interface QRScannerProps {
 const qrcodeRegionId = "qr-code-full-region";
 
 export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailure }) => {
-  const html5QrcodeRef = useRef<Html5Qrcode | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  
+  // Usamos refs para las props para evitar que el useEffect se vuelva a ejecutar
   const onScanSuccessRef = useRef(onScanSuccess);
   onScanSuccessRef.current = onScanSuccess;
   const onScanFailureRef = useRef(onScanFailure);
   onScanFailureRef.current = onScanFailure;
 
   useEffect(() => {
-    // Inicializa el escáner solo una vez
-    if (!html5QrcodeRef.current) {
-      html5QrcodeRef.current = new Html5Qrcode(qrcodeRegionId);
-    }
-    const html5Qrcode = html5QrcodeRef.current;
+    // verbose: false desactiva los logs de la librería en la consola
+    scannerRef.current = new Html5Qrcode(qrcodeRegionId, { verbose: false });
+    const html5Qrcode = scannerRef.current;
 
-    const startScanner = async () => {
-      try {
-        // Asegurarse de que no haya un escaneo activo antes de empezar
-        if (html5Qrcode.getState() === Html5QrcodeScannerState.SCANNING) {
-          await html5Qrcode.stop();
+    const startScanner = () => {
+      html5Qrcode.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0,
+        },
+        (decodedText, _decodedResult) => {
+          // No detener el escáner aquí, el componente padre lo desmontará
+          onScanSuccessRef.current(decodedText);
+        },
+        (errorMessage) => {
+          // Ignorar errores de "QR no encontrado"
         }
-        
-        await html5Qrcode.start(
-          { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0,
-          },
-          (decodedText, _decodedResult) => {
-            onScanSuccessRef.current(decodedText);
-          },
-          (errorMessage) => {
-            // Ignorar errores comunes de "no se encontró QR"
-          }
-        );
-      } catch (err) {
+      ).catch(err => {
         if (onScanFailureRef.current) {
           onScanFailureRef.current(String(err));
         }
-      }
+      });
     };
 
     startScanner();
 
-    // Esta es la función de limpieza CRÍTICA que se ejecuta cuando el componente se desmonta
+    // La función de limpieza se ejecuta cuando el componente se desmonta
     return () => {
-      if (html5Qrcode && html5Qrcode.isScanning) {
-        html5Qrcode.stop()
-          .then(() => console.log("QR Scanner stopped successfully."))
-          .catch((err) => console.error("Failed to stop QR Scanner.", err));
-      }
+      // Usamos clear() que detiene el escaneo y limpia los recursos
+      html5Qrcode.clear().catch(error => {
+        console.error("Fallo al limpiar html5Qrcode.", error);
+      });
     };
-  }, []); // El array vacío asegura que se ejecute al montar y desmontar
+  }, []); // El array vacío asegura que se ejecute solo al montar y desmontar
 
   return (
     <div className="relative w-full max-w-md mx-auto aspect-square rounded-2xl overflow-hidden border-2 border-slate-700 bg-black">
