@@ -111,7 +111,8 @@ const App: React.FC = () => {
         setAuthState({ isAuthenticated: false, user: null });
         return;
       }
-      console.log("Auth Flow (refreshUser): Fetched profile data:", profile);
+      console.log("Auth Flow (refreshUser): Raw profile data:", profile); // Nuevo log
+      console.log("Auth Flow (refreshUser): Profile roles property:", profile?.roles); // Nuevo log
 
       const roleName = (profile?.roles as { name: string } | null)?.name;
       console.log("Auth Flow (refreshUser): Extracted role name:", roleName);
@@ -171,7 +172,8 @@ const App: React.FC = () => {
             console.error("Auth Flow (onAuthStateChange): Error fetching profile:", profileError);
             throw profileError;
           }
-          console.log("Auth Flow (onAuthStateChange): Fetched profile data:", profile);
+          console.log("Auth Flow (onAuthStateChange): Raw profile data:", profile); // Nuevo log
+          console.log("Auth Flow (onAuthStateChange): Profile roles property:", profile?.roles); // Nuevo log
 
           const roleName = (profile?.roles as { name: string } | null)?.name;
           console.log("Auth Flow (onAuthStateChange): Extracted role name:", roleName);
