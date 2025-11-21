@@ -15,6 +15,7 @@ const AccessTerminal: React.FC = () => {
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string, employee?: Employee }>({ type: 'idle', message: '' });
   const [isProcessing, setIsProcessing] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null); // Estado para errores específicos del escáner
+  const [displayedScannerError, setDisplayedScannerError] = useState<string | null>(null); // Estado para el error con debounce
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -27,6 +28,17 @@ const AccessTerminal: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [status]);
+
+  // Efecto para debouncar el error del escáner
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDisplayedScannerError(scannerError);
+    }, 500); // Muestra el error solo si persiste por 500ms
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [scannerError]);
 
   const processAccess = useCallback(async (cedula: string, metodo: 'manual' | 'qr', tipo?: 'entrada' | 'salida') => {
     if (!cedula || isProcessing) return;
@@ -120,11 +132,11 @@ const AccessTerminal: React.FC = () => {
                   </div>
                 ) : mode === 'scan' ? (
                   <div className="p-4">
-                    {scannerError ? (
+                    {displayedScannerError ? ( // Usar displayedScannerError aquí
                       <div className="text-center text-red-400 bg-red-900/50 p-6 rounded-lg">
                         <CameraOff size={48} className="mx-auto mb-4" />
                         <h3 className="font-bold mb-2">Error de Cámara</h3>
-                        <p className="text-sm">{scannerError}</p>
+                        <p className="text-sm">{displayedScannerError}</p>
                       </div>
                     ) : (
                       <QRScanner onScanSuccess={handleScanSuccess} onScanFailure={handleScanFailure} />
