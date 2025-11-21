@@ -41,6 +41,7 @@ export const AppContext = React.createContext<{
   addRecord: (cedula: string, metodo: 'manual' | 'qr', tipo?: 'entrada' | 'salida') => Promise<{ success: boolean; message: string; employee?: Employee }>;
   addEmployee: (emp: Partial<Employee>) => Promise<{ error: any }>;
   updateEmployee: (id: string, emp: Partial<Employee>) => Promise<{ error: any }>;
+  deleteAllAttendanceRecords: () => Promise<{ success: boolean; message: string }>; // Nueva función
 } | null>(null);
 
 const App: React.FC = () => {
@@ -272,7 +273,24 @@ const App: React.FC = () => {
     return { error };
   }, []);
 
-  const contextValue = useMemo(() => ({ authState, employees, records, leaveRequests, users, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers, refreshUser }), [authState, employees, records, leaveRequests, users, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers, refreshUser]);
+  const deleteAllAttendanceRecords = useCallback(async () => {
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('manage-attendance', {
+        method: 'DELETE',
+      });
+      if (invokeError) throw invokeError;
+      if (data?.error) throw new Error(data.error);
+      toast.success(data.message);
+      await fetchRecords(); // Refrescar los registros después de la eliminación
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      console.error("Error deleting all attendance records:", err.message);
+      toast.error(err.message || 'Error al eliminar los registros de asistencia.');
+      return { success: false, message: err.message || 'Error al eliminar los registros de asistencia.' };
+    }
+  }, [fetchRecords]);
+
+  const contextValue = useMemo(() => ({ authState, employees, records, leaveRequests, users, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers, refreshUser, deleteAllAttendanceRecords }), [authState, employees, records, leaveRequests, users, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers, refreshUser, deleteAllAttendanceRecords]);
 
   return (
     <AppContext.Provider value={contextValue}>

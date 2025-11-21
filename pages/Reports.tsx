@@ -1,12 +1,18 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../App';
 import { Card, Badge, Button } from '../components/UIComponents';
-import { Download, Filter } from 'lucide-react';
+import { Download, Filter, Trash2, AlertTriangle } from 'lucide-react';
+import { ConfirmationModal } from '../src/components/ConfirmationModal'; // Importar ConfirmationModal
+import { usePermissions } from '../src/context/PermissionsContext'; // Importar usePermissions
 
 const Reports: React.FC = () => {
-  const { records, employees } = useContext(AppContext)!;
+  const { records, employees, authState, deleteAllAttendanceRecords } = useContext(AppContext)!;
+  const { can } = usePermissions(); // Usar usePermissions
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
   const [filterType, setFilterType] = useState<'all' | 'entrada' | 'salida'>('all');
+
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
 
   const filteredRecords = records.filter(r => {
     const dateMatch = r.fecha === filterDate;
@@ -30,11 +36,34 @@ const Reports: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  const handleDeleteAllRecords = async () => {
+    setIsDeletingAll(true);
+    const result = await deleteAllAttendanceRecords();
+    if (result.success) {
+      // toast.success ya se maneja en deleteAllAttendanceRecords
+    } else {
+      // toast.error ya se maneja en deleteAllAttendanceRecords
+    }
+    setIsDeletingAll(false);
+    setShowDeleteConfirmModal(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <h1 className="text-2xl font-bold text-gray-800">Reportes de Asistencia</h1>
-        <Button onClick={downloadCSV} variant="outline" className="gap-2 self-start sm:self-auto"><Download size={18} /> Exportar CSV</Button>
+        <div className="flex gap-2 self-start sm:self-auto">
+          {authState.user?.role === 'superadmin' && ( // Solo superadmin puede ver este botón
+            <Button 
+              variant="danger" 
+              onClick={() => setShowDeleteConfirmModal(true)} 
+              className="gap-2"
+            >
+              <Trash2 size={18} /> Eliminar Todos
+            </Button>
+          )}
+          <Button onClick={downloadCSV} variant="outline" className="gap-2"><Download size={18} /> Exportar CSV</Button>
+        </div>
       </div>
       <Card>
         <div className="flex flex-wrap gap-4 mb-6 p-4 bg-gray-50 rounded-lg border items-center">
@@ -68,6 +97,20 @@ const Reports: React.FC = () => {
           )}
         </div>
       </Card>
+
+      <ConfirmationModal
+        isOpen={showDeleteConfirmModal}
+        onClose={() => setShowDeleteConfirmModal(false)}
+        onConfirm={handleDeleteAllRecords}
+        title="Confirmar Eliminación Masiva"
+        message="¿Está absolutamente seguro de que desea eliminar TODOS los registros de asistencia? Esta acción es irreversible y eliminará permanentemente todos los datos de asistencia."
+        confirmText="Sí, Eliminar Todo"
+        cancelText="Cancelar"
+        isConfirming={isDeletingAll}
+        confirmButtonVariant="danger"
+        icon={<AlertTriangle className="h-6 w-6 text-red-600" aria-hidden="true" />}
+        iconBgClass="bg-red-100"
+      />
     </div>
   );
 };
