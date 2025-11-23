@@ -549,4 +549,122 @@ router.delete('/all', verifyToken, async (req, res) => {
     }
 });
 
+// GET /api/attendance/overtime/summary - Obtener resumen de horas extra por empleado
+router.get('/overtime/summary', verifyToken, async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({ error: 'startDate and endDate are required' });
+        }
+
+        const connection = await pool.getConnection();
+
+        // Obtener todos los empleados activos
+        const [employees] = await connection.execute(
+            'SELECT id, nombre, foto, cargo, departamento, horario_entrada, horario_salida FROM employees WHERE estado = "activo"'
+        );
+
+        // Obtener registros de asistencia en el rango
+        const [records] = await connection.execute(
+            `SELECT employee_id, fecha, hora, tipo 
+             FROM attendance_records 
+             WHERE fecha >= ? AND fecha <= ? 
+             ORDER BY employee_id, fecha, hora`,
+            [startDate, endDate]
+        );
+
+        connection.release();
+
+        // Agrupar registros por empleado y fecha
+        const recordsByEmployeeAndDate = {};
+        for (const record of records) {
+            if (!recordsByEmployeeAndDate[record.employee_id]) {
+                recordsByEmployeeAndDate[record.employee_id] = {};
+            }
+            if (!recordsByEmployeeAndDate[record.employee_id][record.fecha]) {
+                recordsByEmployeeAndDate[record.employee_id][record.fecha] = [];
+            }
+            recordsByEmployeeAndDate[record.employee_id][record.fecha].push(record);
+        }
+
+        // Calcular horas extra por empleado
+        const results = [];
+
+        for (const employee of employees) {
+            if (!recordsByEmployeeAndDate[employee.id]) continue;
+
+            let totalOvertimeMinutes = 0;
+            const dailyDetails = [];
+
+            const employeeRecords = recordsByEmployeeAndDate[employee.id];
+
+            for (const fecha in employeeRecords) {
+                const dailyRecords = employeeRecords[fecha];
+
+                // Obtener primera entrada
+                const entradas = dailyRecords
+                    .filter(r => r.tipo === 'entrada')
+                    .sort((a, b) => a.hora.localeCompare(b.hora));
+
+                // Obtener última salida
+                const salidas = dailyRecords
+                    .filter(r => r.tipo === 'salida')
+                    .sort((a, b) => b.hora.localeCompare(a.hora));
+
+                if (entradas.length > 0 && salidas.length > 0 && employee.horario_salida) {
+                    const firstEntry = entradas[0].hora;
+                    const lastExit = salidas[0].hora;
+                    const scheduledExit = employee.horario_salida;
+
+                    // Calcular diferencia en minutos
+                    const scheduledExitDate = new Date(`1970-01-01T${scheduledExit}`);
+                    const actualExitDate = new Date(`1970-01-01T${lastExit}`);
+
+                    const diffMillis = actualExitDate.getTime() - scheduledExitDate.getTime();
+                    const diffMinutes = Math.round(diffMillis / 60000);
+
+                    if (diffMinutes > 0) {
+                        totalOvertimeMinutes += diffMinutes;
+                        dailyDetails.push({
+                            fecha,
+                            horaEntrada: firstEntry,
+                            horaSalidaReal: lastExit,
+                            horaProgramada: scheduledExit,
+                            overtimeMinutes: diffMinutes
+                        });
+                    }
+                }
+            }
+
+            if (totalOvertimeMinutes > 0) {
+                // Formatear minutos a "Xh Ym"
+                const hours = Math.floor(totalOvertimeMinutes / 60);
+                const minutes = totalOvertimeMinutes % 60;
+                const formatted = `${hours}h ${minutes}m`;
+
+                results.push({
+                    employeeId: employee.id,
+                    nombre: employee.nombre,
+                    foto: employee.foto,
+                    cargo: employee.cargo,
+                    departamento: employee.departamento,
+                    horario_salida: employee.horario_salida,
+                    totalOvertimeMinutes,
+                    totalOvertimeFormatted: formatted,
+                    dailyDetails
+                });
+            }
+        }
+
+        // Ordenar por mayor a menor
+        results.sort((a, b) => b.totalOvertimeMinutes - a.totalOvertimeMinutes);
+
+        res.json(results);
+    } catch (error) {
+        console.error('Error fetching overtime summary:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 export default router;

@@ -1,9 +1,11 @@
-import React, { useState, useMemo, useContext } from 'react';
+import React, { useState, useMemo, useContext, useEffect } from 'react';
 import { AppContext } from '../App';
 import { Card, Input, Button } from '../components/UIComponents';
 import { Employee, AttendanceRecord, EmployeeOvertimeData, DailyOvertimeDetail } from '../types';
-import { Clock, Eye } from 'lucide-react';
-import { OvertimeDetailModal } from '../src/components/OvertimeDetailModal'; // Importar el nuevo modal
+import { Clock, Eye, Download } from 'lucide-react';
+import { OvertimeDetailModal } from '../src/components/OvertimeDetailModal';
+import { apiClient } from '../src/services/apiClient';
+import toast from 'react-hot-toast';
 
 // Helper para formatear minutos a "Xh Ym"
 const formatMinutesToHours = (totalMinutes: number) => {
@@ -23,75 +25,63 @@ const OvertimeReport: React.FC = () => {
 
   const [startDate, setStartDate] = useState(firstDayOfMonth);
   const [endDate, setEndDate] = useState(todayISO);
+  const [loading, setLoading] = useState(false);
+  const [overtimeData, setOvertimeData] = useState<EmployeeOvertimeData[]>([]);
 
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedEmployeeOvertimeData, setSelectedEmployeeOvertimeData] = useState<EmployeeOvertimeData | null>(null);
 
-  const overtimeData = useMemo(() => {
-    const filteredRecords = records.filter(r => r.fecha >= startDate && r.fecha <= endDate);
-    
-    const recordsByEmployee: { [key: string]: AttendanceRecord[] } = {};
-    for (const record of filteredRecords) {
-      if (!recordsByEmployee[record.employee_id]) {
-        recordsByEmployee[record.employee_id] = [];
-      }
-      recordsByEmployee[record.employee_id].push(record);
+  // Cargar horas extra del backend
+  const loadOvertimeData = async () => {
+    setLoading(true);
+    try {
+      const data = await apiClient.get('/attendance/overtime/summary', {
+        params: { startDate, endDate }
+      });
+
+      // Convertir data del backend a formato EmployeeOvertimeData
+      const formattedData: EmployeeOvertimeData[] = data.map((item: any) => {
+        // Obtener horario_salida del item directamente (viene del backend)
+        const horarioSalida = item.horario_salida || item.scheduledExitTime || '';
+
+        return {
+          employee: {
+            id: item.employeeId,
+            nombre: item.nombre,
+            foto: item.foto,
+            cargo: item.cargo,
+            departamento: item.departamento,
+            cedula: '',
+            horario_entrada: '',
+            horario_salida: horarioSalida,
+            estado: 'activo',
+            fecha_ingreso: ''
+          } as Employee,
+          totalOvertimeMinutes: item.totalOvertimeMinutes,
+          dailyDetails: item.dailyDetails.map((detail: any) => ({
+            date: detail.fecha,
+            entryTime: detail.horaEntrada,
+            actualExitTime: detail.horaSalidaReal,
+            scheduledExitTime: detail.horaProgramada,
+            dailyOvertimeMinutes: detail.overtimeMinutes
+          }))
+        };
+      });
+
+      setOvertimeData(formattedData);
+      toast.success('Horas extra cargadas correctamente');
+    } catch (error: any) {
+      toast.error('Error al cargar horas extra');
+      console.error(error);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const results: EmployeeOvertimeData[] = [];
-
-    for (const employee of employees) {
-      const employeeRecords = recordsByEmployee[employee.id] || [];
-      if (employeeRecords.length === 0) continue;
-
-      let totalOvertime = 0;
-      const dailyDetails: DailyOvertimeDetail[] = [];
-      
-      const recordsByDate: { [key: string]: AttendanceRecord[] } = {};
-      for (const record of employeeRecords) {
-        if (!recordsByDate[record.fecha]) recordsByDate[record.fecha] = [];
-        recordsByDate[record.fecha].push(record);
-      }
-
-      for (const date in recordsByDate) {
-        const dailyRecords = recordsByDate[date];
-        const firstEntrada = dailyRecords
-          .filter(r => r.tipo === 'entrada')
-          .sort((a, b) => a.hora.localeCompare(b.hora))[0]; // Primera entrada
-        const lastSalida = dailyRecords
-          .filter(r => r.tipo === 'salida')
-          .sort((a, b) => b.hora.localeCompare(a.hora))[0]; // Última salida
-
-        if (firstEntrada && lastSalida && employee.horario_salida) {
-          const scheduleExitTime = new Date(`1970-01-01T${employee.horario_salida}`);
-          const actualExitTime = new Date(`1970-01-01T${lastSalida.hora}`);
-
-          let dailyOvertimeMinutes = 0;
-          if (actualExitTime > scheduleExitTime) {
-            const diffMillis = actualExitTime.getTime() - scheduleExitTime.getTime();
-            dailyOvertimeMinutes = Math.round(diffMillis / 60000); // Convertir a minutos
-          }
-
-          if (dailyOvertimeMinutes > 0) {
-            totalOvertime += dailyOvertimeMinutes;
-            dailyDetails.push({
-              date: date,
-              entryTime: firstEntrada.hora,
-              actualExitTime: lastSalida.hora,
-              scheduledExitTime: employee.horario_salida,
-              dailyOvertimeMinutes: dailyOvertimeMinutes,
-            });
-          }
-        }
-      }
-      
-      if (totalOvertime > 0) {
-        results.push({ employee, totalOvertimeMinutes: totalOvertime, dailyDetails });
-      }
-    }
-
-    return results.sort((a, b) => b.totalOvertimeMinutes - a.totalOvertimeMinutes);
-  }, [employees, records, startDate, endDate]);
+  // Cargar automáticamente al montar
+  useEffect(() => {
+    loadOvertimeData();
+  }, []);
 
   const handleOpenDetailModal = (data: EmployeeOvertimeData) => {
     setSelectedEmployeeOvertimeData(data);
@@ -103,6 +93,26 @@ const OvertimeReport: React.FC = () => {
     setSelectedEmployeeOvertimeData(null);
   };
 
+  const downloadCSV = () => {
+    const headers = ['Empleado', 'Cargo', 'Departamento', 'Horas Extra'];
+    const rows = overtimeData.map(data => [
+      data.employee.nombre,
+      data.employee.cargo,
+      data.employee.departamento,
+      formatMinutesToHours(data.totalOvertimeMinutes)
+    ].join(','));
+
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(','), ...rows].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `horas_extra_${startDate}_a_${endDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Reporte exportado correctamente');
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -111,18 +121,36 @@ const OvertimeReport: React.FC = () => {
       </div>
 
       <Card>
-        <div className="p-4 border-b flex items-center gap-4">
+        <div className="p-4 border-b flex flex-wrap items-center gap-4">
           <label className="font-medium text-sm">Desde:</label>
           <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-auto" />
           <label className="font-medium text-sm">Hasta:</label>
           <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-auto" />
+          <Button
+            onClick={loadOvertimeData}
+            disabled={loading}
+            className="px-4 py-2"
+          >
+            {loading ? 'Cargando...' : 'Cargar'}
+          </Button>
+          <Button
+            onClick={downloadCSV}
+            disabled={overtimeData.length === 0}
+            variant="outline"
+            className="gap-2 ml-auto"
+          >
+            <Download size={18} /> Exportar CSV
+          </Button>
         </div>
         <div className="overflow-x-auto">
-          {overtimeData.length > 0 ? (
+          {loading ? (
+            <div className="text-center py-12 text-gray-400">Cargando horas extra...</div>
+          ) : overtimeData.length > 0 ? (
             <table className="w-full text-left">
               <thead>
                 <tr className="text-gray-500 border-b text-sm">
                   <th className="px-4 py-3 font-medium">Empleado</th>
+                  <th className="px-4 py-3 font-medium">Cargo</th>
                   <th className="px-4 py-3 font-medium">Departamento</th>
                   <th className="px-4 py-3 font-medium text-right">Horas Extra Acumuladas</th>
                   <th className="px-4 py-3 font-medium text-right">Acciones</th>
@@ -137,6 +165,7 @@ const OvertimeReport: React.FC = () => {
                         <span className="font-medium">{data.employee.nombre}</span>
                       </div>
                     </td>
+                    <td className="px-4 py-3">{data.employee.cargo}</td>
                     <td className="px-4 py-3">{data.employee.departamento}</td>
                     <td className="px-4 py-3 text-right font-medium text-lg text-blue-600">
                       {formatMinutesToHours(data.totalOvertimeMinutes)}
