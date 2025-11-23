@@ -84,11 +84,10 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        // Verificar que el usuario tenga un rol permitido para acceder al sistema
-        const allowedRoles = ['superadmin', 'admin', 'hr_manager', 'department_head'];
-        if (!allowedRoles.includes(user.role)) {
+        // Verificar que el usuario tenga un rol asignado
+        if (!user.role || user.role === null) {
             connection.release();
-            return res.status(403).json({ message: 'Access denied. Your role does not have system access permissions.' });
+            return res.status(403).json({ message: 'Access denied. User has no role assigned.' });
         }
 
         // Generar tokens

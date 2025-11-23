@@ -260,22 +260,124 @@ const RolePermissionManagement: React.FC = () => {
               />
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Permisos</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  {allPermissions.map(permission => (
-                    <div key={permission.id} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        id={`perm-${permission.action}`}
-                        checked={roleFormData.permissions.includes(permission.action)}
-                        onChange={() => handlePermissionToggle(permission.action)}
-                        className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <label htmlFor={`perm-${permission.action}`} className="ml-2 text-sm text-gray-700 cursor-pointer">
-                        {permission.description} <span className="text-gray-400 text-xs">({permission.action})</span>
-                      </label>
+                <label className="block text-sm font-medium text-gray-700 mb-4">Permisos por Módulo</label>
+
+                {/* Agrupar permisos por módulo */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* EMPLEADOS */}
+                  <div className="border rounded-lg p-4 bg-gray-50">
+                    <h4 className="font-semibold text-sm text-gray-800 mb-3 pb-2 border-b">👥 Empleados</h4>
+                    <div className="space-y-2">
+                      {allPermissions
+                        .filter(p => p.action.startsWith('employees:'))
+                        .map(permission => (
+                          <div key={permission.id} className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id={`perm-${permission.action}`}
+                              checked={roleFormData.permissions.includes(permission.action)}
+                              onChange={() => handlePermissionToggle(permission.action)}
+                              className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                            />
+                            <label htmlFor={`perm-${permission.action}`} className="ml-2 text-sm text-gray-700 cursor-pointer">
+                              {permission.description}
+                            </label>
+                          </div>
+                        ))}
                     </div>
-                  ))}
+                  </div>
+
+                  {/* ASISTENCIA */}
+                  <div className="border rounded-lg p-4 bg-gray-50">
+                    <h4 className="font-semibold text-sm text-gray-800 mb-3 pb-2 border-b">🚪 Asistencia</h4>
+                    <div className="space-y-2">
+                      {allPermissions
+                        .filter(p => p.action.startsWith('attendance:'))
+                        .map(permission => (
+                          <div key={permission.id} className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id={`perm-${permission.action}`}
+                              checked={roleFormData.permissions.includes(permission.action)}
+                              onChange={() => handlePermissionToggle(permission.action)}
+                              className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                            />
+                            <label htmlFor={`perm-${permission.action}`} className="ml-2 text-sm text-gray-700 cursor-pointer">
+                              {permission.description}
+                            </label>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* SOLICITUDES DE AUSENCIA */}
+                  <div className="border rounded-lg p-4 bg-gray-50">
+                    <h4 className="font-semibold text-sm text-gray-800 mb-3 pb-2 border-b">🏥 Ausencias</h4>
+                    <div className="space-y-2">
+                      {allPermissions
+                        .filter(p => p.action.startsWith('leave_requests:'))
+                        .map(permission => (
+                          <div key={permission.id} className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id={`perm-${permission.action}`}
+                              checked={roleFormData.permissions.includes(permission.action)}
+                              onChange={() => handlePermissionToggle(permission.action)}
+                              className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                            />
+                            <label htmlFor={`perm-${permission.action}`} className="ml-2 text-sm text-gray-700 cursor-pointer">
+                              {permission.description}
+                            </label>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* USUARIOS */}
+                  <div className="border rounded-lg p-4 bg-gray-50">
+                    <h4 className="font-semibold text-sm text-gray-800 mb-3 pb-2 border-b">👤 Usuarios</h4>
+                    <div className="space-y-2">
+                      {allPermissions
+                        .filter(p => p.action.startsWith('users:'))
+                        .map(permission => (
+                          <div key={permission.id} className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id={`perm-${permission.action}`}
+                              checked={roleFormData.permissions.includes(permission.action)}
+                              onChange={() => handlePermissionToggle(permission.action)}
+                              className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                            />
+                            <label htmlFor={`perm-${permission.action}`} className="ml-2 text-sm text-gray-700 cursor-pointer">
+                              {permission.description}
+                            </label>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* ROLES Y PERMISOS */}
+                  <div className="border rounded-lg p-4 bg-gray-50">
+                    <h4 className="font-semibold text-sm text-gray-800 mb-3 pb-2 border-b">🔐 Sistema</h4>
+                    <div className="space-y-2">
+                      {allPermissions
+                        .filter(p => p.action.startsWith('roles:') || p.action.startsWith('permissions:'))
+                        .map(permission => (
+                          <div key={permission.id} className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id={`perm-${permission.action}`}
+                              checked={roleFormData.permissions.includes(permission.action)}
+                              onChange={() => handlePermissionToggle(permission.action)}
+                              className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                            />
+                            <label htmlFor={`perm-${permission.action}`} className="ml-2 text-sm text-gray-700 cursor-pointer">
+                              {permission.description}
+                            </label>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 

@@ -68,16 +68,21 @@ serve(async (req) => {
         return new Response(JSON.stringify(combinedUsers), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
       case 'POST': {
-        const { email, password, full_name, role } = await req.json()
+        const { email, password, full_name, role, role_id } = await req.json()
 
-        // Obtener el role_id basado en el nombre del rol
-        const { data: roleData, error: roleError } = await supabaseAdmin
-            .from('roles')
-            .select('id')
-            .eq('name', role)
-            .single();
-        if (roleError || !roleData) throw new Error('Role not found');
-        const roleId = roleData.id;
+        // Obtener el role_id basado en role (nombre) o role_id (UUID)
+        let roleId = role_id; // Si viene role_id directamente, úsalo
+        if (!roleId && role) {
+            // Si viene role (nombre), obtén el role_id
+            const { data: roleData, error: roleError } = await supabaseAdmin
+                .from('roles')
+                .select('id')
+                .eq('name', role)
+                .single();
+            if (roleError || !roleData) throw new Error('Role not found');
+            roleId = roleData.id;
+        }
+        if (!roleId) throw new Error('Role ID is required');
 
         const { data, error } = await supabaseAdmin.auth.admin.createUser({
           email,
@@ -98,21 +103,24 @@ serve(async (req) => {
         return new Response(JSON.stringify(data.user), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
       case 'PUT': {
-        const { id, full_name, role, email, password, is_banned } = await req.json();
+        const { id, full_name, role, email, password, is_banned, role_id } = await req.json();
 
         // --- Profile Update Logic ---
         const profileUpdatePayload: any = {};
         if (typeof full_name !== 'undefined') profileUpdatePayload.full_name = full_name;
         
-        if (typeof role !== 'undefined') {
-            // Obtener el role_id basado en el nombre del rol
+        if (typeof role_id !== 'undefined' && role_id) {
+            // Si viene role_id directamente, úsalo
+            profileUpdatePayload.role_id = role_id;
+        } else if (typeof role !== 'undefined') {
+            // Si viene role (nombre), obtén el role_id
             const { data: roleData, error: roleError } = await supabaseAdmin
                 .from('roles')
                 .select('id')
                 .eq('name', role)
                 .single();
             if (roleError || !roleData) throw new Error('Role not found');
-            profileUpdatePayload.role_id = roleData.id; // Actualizar role_id, no 'role'
+            profileUpdatePayload.role_id = roleData.id;
         }
 
         if (Object.keys(profileUpdatePayload).length > 0) {

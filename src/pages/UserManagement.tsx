@@ -18,7 +18,7 @@ const UserManagement: React.FC = () => {
     full_name: '',
     email: '',
     password: '',
-    role: 'admin' as RoleName, // Usar RoleName
+    role_id: '', // Cambiar de 'role' a 'role_id'
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -56,16 +56,23 @@ const UserManagement: React.FC = () => {
     if (user) {
       setIsEditing(true);
       setCurrentUser(user);
+      // Obtener el ID del rol basado en su nombre
+      const userRole = availableRoles.find(r => r.name === user.role);
       setFormData({
         full_name: user.full_name,
         email: user.email,
         password: '',
-        role: user.role as RoleName, // Asegurar el tipo RoleName
+        role_id: userRole?.id || '', // Usar role_id con el ID del rol
       });
     } else {
       setIsEditing(false);
       setCurrentUser(null);
-      setFormData({ full_name: '', email: '', password: '', role: availableRoles[0]?.name || 'admin' }); // Establecer el primer rol disponible como predeterminado
+      setFormData({
+        full_name: '',
+        email: '',
+        password: '',
+        role_id: availableRoles[0]?.id || '' // Usar el ID del primer rol disponible
+      });
     }
     setShowModal(true);
   };
@@ -219,9 +226,15 @@ const UserManagement: React.FC = () => {
               <Input label={isEditing ? "Nueva Contraseña (opcional)" : "Contraseña"} type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} required={!isEditing} />
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as RoleName })}>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  value={formData.role_id}
+                  onChange={e => setFormData({ ...formData, role_id: e.target.value })}
+                  required
+                >
+                  <option value="">Seleccionar rol...</option>
                   {availableRoles.map(role => (
-                    <option key={role.id} value={role.name}>
+                    <option key={role.id} value={role.id}>
                       {role.name}
                     </option>
                   ))}

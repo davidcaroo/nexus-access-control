@@ -35,7 +35,10 @@ export const PermissionsProvider: React.FC<{ children: ReactNode }> = ({ childre
       } else {
         // Para otros roles, obtener permisos del backend
         const data = await apiClient.get('/auth/me/permissions');
-        setPermissions(data || []);
+        // El backend devuelve { permissions: [...] }, extraer el array
+        const perms = Array.isArray(data) ? data : (data?.permissions || []);
+        console.log('Permisos cargados para el usuario:', authState.user?.role, perms);
+        setPermissions(perms);
       }
     } catch (error) {
       console.error("Error fetching permissions:", error);
@@ -50,7 +53,7 @@ export const PermissionsProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [fetchPermissions]);
 
   const can = (action: string): boolean => {
-    return permissions.includes(action);
+    return Array.isArray(permissions) ? permissions.includes(action) : false;
   };
 
   return (

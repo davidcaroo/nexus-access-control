@@ -36,8 +36,16 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({ to, icon, label, target }) =>
 export const Sidebar: React.FC = () => {
   const { logout, authState } = React.useContext(AppContext)!;
   const { isCollapsed, toggleCollapse, isMobileOpen, closeMobileSidebar } = useSidebar();
-  const { can } = usePermissions();
+  const { can, permissions } = usePermissions();
   const navigate = useNavigate();
+
+  // Helper function to check if user can access any permission in a module
+  const canAccessModule = (modulePrefix: string): boolean => {
+    if (authState.user?.role === 'superadmin') return true;
+    // Check if user has ANY permission starting with the module prefix
+    // This includes read, view, create, update, delete, etc.
+    return permissions.some(perm => perm.startsWith(modulePrefix + ':'));
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -63,12 +71,12 @@ export const Sidebar: React.FC = () => {
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {(authState.user?.role === 'superadmin' || can('dashboard:view')) && <SidebarLink to="/admin/dashboard" icon={<LayoutDashboard size={20} />} label="Dashboard" />}
-          {(authState.user?.role === 'superadmin' || can('employees:view')) && <SidebarLink to="/admin/employees" icon={<Users size={20} />} label="Personal" />}
-          {(authState.user?.role === 'superadmin' || can('leave_requests:view')) && <SidebarLink to="/admin/leave-requests" icon={<CalendarCheck size={20} />} label="Solicitudes de Ausencia" />}
-          {(authState.user?.role === 'superadmin' || can('reports:view')) && <SidebarLink to="/admin/reports" icon={<FileBarChart size={20} />} label="Reportes" />}
-          {(authState.user?.role === 'superadmin' || can('overtime:view')) && <SidebarLink to="/admin/overtime" icon={<AlarmClockPlus size={20} />} label="Horas Extra" />}
-          {(authState.user?.role === 'superadmin' || can('users:view')) && <SidebarLink to="/admin/users" icon={<Shield size={20} />} label="Usuarios del Sistema" />}
-          {(authState.user?.role === 'superadmin' || can('roles_permissions:manage')) && <SidebarLink to="/admin/roles-permissions" icon={<Key size={20} />} label="Roles y Permisos" />}
+          {canAccessModule('employees') && <SidebarLink to="/admin/employees" icon={<Users size={20} />} label="Personal" />}
+          {canAccessModule('leave_requests') && <SidebarLink to="/admin/leave-requests" icon={<CalendarCheck size={20} />} label="Solicitudes de Ausencia" />}
+          {canAccessModule('reports') && <SidebarLink to="/admin/reports" icon={<FileBarChart size={20} />} label="Reportes" />}
+          {canAccessModule('attendance') && <SidebarLink to="/admin/overtime" icon={<AlarmClockPlus size={20} />} label="Horas Extra" />}
+          {canAccessModule('users') && <SidebarLink to="/admin/users" icon={<Shield size={20} />} label="Usuarios del Sistema" />}
+          {canAccessModule('roles') && <SidebarLink to="/admin/roles-permissions" icon={<Key size={20} />} label="Roles y Permisos" />}
 
           <div className="!my-4 border-t border-slate-800"></div>
           <SidebarLink to="/" target="_blank" icon={<QrCode size={20} />} label="Terminal de Acceso" />
