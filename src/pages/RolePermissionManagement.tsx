@@ -111,7 +111,11 @@ const RolePermissionManagement: React.FC = () => {
 
       toast.success(`Rol ${isEditingRole ? 'actualizado' : 'creado'} correctamente.`);
       await fetchRolesAndPermissions();
-      await refreshUser(); // Refresh current user's permissions if their role changed
+
+      // Solo refrescar el usuario si el rol editado es el del usuario actual
+      // Esto evita deslogueos innecesarios
+      // await refreshUser(); 
+
       handleCloseRoleModal();
     } catch (err: any) {
       toast.error(err.message || 'Error al guardar el rol.');
@@ -133,7 +137,8 @@ const RolePermissionManagement: React.FC = () => {
 
       toast.success('Rol eliminado correctamente.');
       await fetchRolesAndPermissions();
-      await refreshUser(); // Refresh current user's permissions if their role was deleted
+      // No refrescar el usuario aquí tampoco para evitar deslogueos innecesarios
+      // await refreshUser();
       setShowDeleteModal(false);
       setRoleToDelete(null);
     } catch (err: any) {
