@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { supabase } from '../integrations/supabase/client';
+import { apiClient } from '../services/apiClient';
 import { Role, Permission, RoleName } from '../../types';
 import { Card, Button, Input, Badge } from '../../components/UIComponents';
 import { Plus, Edit, Trash2, X, Shield, Check, XCircle } from 'lucide-react';
@@ -33,19 +34,11 @@ const RolePermissionManagement: React.FC = () => {
     setIsLoading(true);
     try {
       // Fetch roles
-      const { data: rolesData, error: rolesError } = await supabase.functions.invoke('manage-roles-permissions/roles', {
-        method: 'GET',
-      });
-      if (rolesError) throw rolesError;
-      if (rolesData.error) throw new Error(rolesData.error);
+      const rolesData = await apiClient.get('/roles');
       setRoles(rolesData);
 
       // Fetch all available permissions
-      const { data: permissionsData, error: permissionsError } = await supabase.functions.invoke('manage-roles-permissions/permissions', {
-        method: 'GET',
-      });
-      if (permissionsError) throw permissionsError;
-      if (permissionsData.error) throw new Error(permissionsData.error);
+      const permissionsData = await apiClient.get('/roles/permissions');
       setAllPermissions(permissionsData);
 
     } catch (err: any) {
@@ -102,8 +95,6 @@ const RolePermissionManagement: React.FC = () => {
     setIsSavingRole(true);
 
     try {
-      const method = isEditingRole ? 'PUT' : 'POST';
-      const endpoint = 'manage-roles-permissions/roles';
       const payload = {
         id: roleFormData.id,
         name: roleFormData.name,
@@ -111,12 +102,12 @@ const RolePermissionManagement: React.FC = () => {
         permissions: roleFormData.permissions,
       };
 
-      const { data, error: invokeError } = await supabase.functions.invoke(endpoint, {
-        method,
-        body: payload,
-      });
-      if (invokeError) throw invokeError;
-      if (data?.error) throw new Error(data.error);
+      if (isEditingRole && payload.id) {
+        const { id, ...updateData } = payload;
+        await apiClient.patch(`/roles/${id}`, updateData);
+      } else {
+        await apiClient.post('/roles', payload);
+      }
 
       toast.success(`Rol ${isEditingRole ? 'actualizado' : 'creado'} correctamente.`);
       await fetchRolesAndPermissions();
@@ -138,12 +129,7 @@ const RolePermissionManagement: React.FC = () => {
     if (!roleToDelete) return;
     setIsDeletingRole(true);
     try {
-      const { data, error: invokeError } = await supabase.functions.invoke('manage-roles-permissions/roles', {
-        method: 'DELETE',
-        body: { id: roleToDelete.id },
-      });
-      if (invokeError) throw invokeError;
-      if (data?.error) throw new Error(data.error);
+      await apiClient.delete(`/roles/${roleToDelete.id}`);
 
       toast.success('Rol eliminado correctamente.');
       await fetchRolesAndPermissions();

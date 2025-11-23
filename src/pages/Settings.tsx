@@ -1,6 +1,6 @@
-import React, { useState, useContext, useRef } from 'react';
+import React, { useState, useContext, useRef, useEffect } from 'react';
 import { AppContext } from '../../App';
-import { supabase } from '../integrations/supabase/client';
+import { apiClient } from '../services/apiClient';
 import { Card, Input, Button } from '../../components/UIComponents';
 import { Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -16,22 +16,62 @@ const Settings: React.FC = () => {
 
   const [isPasswordResetSending, setIsPasswordResetSending] = useState(false);
 
+  // Configuración del sistema (solo superadmin)
+  const [allowMultipleAttendance, setAllowMultipleAttendance] = useState(false);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Cargar configuraciones
+  useEffect(() => {
+    if (user?.role === 'superadmin') {
+      loadSettings();
+    }
+  }, [user]);
+
+  const loadSettings = async () => {
+    setIsLoadingSettings(true);
+    try {
+      const data = await apiClient.get('/settings');
+      setAllowMultipleAttendance(data.allow_multiple_attendance === true || data.allow_multiple_attendance === 'true');
+    } catch (error) {
+      toast.error('Error al cargar configuraciones');
+      console.error(error);
+    } finally {
+      setIsLoadingSettings(false);
+    }
+  };
+
+  const handleToggleMultipleAttendance = async () => {
+    setIsSavingSettings(true);
+    try {
+      const newValue = !allowMultipleAttendance;
+      await apiClient.patch('/settings/allow_multiple_attendance', { value: newValue });
+      setAllowMultipleAttendance(newValue);
+      toast.success(`${newValue ? 'Permitido' : 'Prohibido'} marcar múltiples entradas/salidas`);
+    } catch (error: any) {
+      toast.error(error.message || 'Error al guardar configuración');
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     setIsProfileSaving(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ full_name: fullName })
-      .eq('id', user.id);
 
-    if (error) {
+    try {
+      const response = await apiClient.patch(`/users/${user.id}`, { full_name: fullName });
+      if (response) {
+        toast.success('Nombre actualizado correctamente.');
+        await refreshUser();
+      }
+    } catch (error) {
       toast.error('Error al actualizar el perfil.');
-    } else {
-      toast.success('Nombre actualizado correctamente.');
-      await refreshUser();
+      console.error('Profile update error:', error);
+    } finally {
+      setIsProfileSaving(false);
     }
-    setIsProfileSaving(false);
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -39,36 +79,27 @@ const Settings: React.FC = () => {
     if (!file || !user) return;
 
     setIsAvatarUploading(true);
-    
-    const fileExt = file.name.split('.').pop();
-    const filePath = `public/avatars/${user.id}.${fileExt}`;
-    
-    const { error: uploadError } = await supabase.storage
-      .from('employee_photos')
-      .upload(filePath, file, { upsert: true });
 
-    if (uploadError) {
-      toast.error(`Error al subir la imagen: ${uploadError.message}`);
-      setIsAvatarUploading(false);
-      return;
-    }
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result as string;
 
-    const { data: { publicUrl } } = supabase.storage.from('employee_photos').getPublicUrl(filePath);
-    
-    const finalUrl = `${publicUrl}?t=${new Date().getTime()}`;
+      try {
+        // Guardar avatar base64 en la BD directamente
+        const response = await apiClient.patch('/auth/me/avatar', { avatar_url: base64 });
 
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ avatar_url: finalUrl })
-      .eq('id', user.id);
-    
-    if (updateError) {
-      toast.error('Error al guardar la nueva foto.');
-    } else {
-      toast.success('Foto de perfil actualizada.');
-      await refreshUser();
-    }
-    setIsAvatarUploading(false);
+        if (response) {
+          toast.success('Foto de perfil actualizada.');
+          await refreshUser();
+        }
+      } catch (error) {
+        toast.error('Error al guardar la nueva foto.');
+        console.error('Avatar upload error:', error);
+      } finally {
+        setIsAvatarUploading(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handlePasswordResetRequest = async () => {
@@ -77,16 +108,16 @@ const Settings: React.FC = () => {
       return;
     }
     setIsPasswordResetSending(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-      redirectTo: window.location.origin,
-    });
 
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success('Enlace enviado. Revisa tu correo para continuar.');
+    try {
+      // Nota: Este endpoint aún necesita ser implementado en el backend
+      // Por ahora solo mostrar mensaje informativo
+      toast.info('Contacta al administrador para cambiar tu contraseña.');
+    } catch (error) {
+      toast.error('Error al procesar la solicitud.');
+    } finally {
+      setIsPasswordResetSending(false);
     }
-    setIsPasswordResetSending(false);
   };
 
   if (!user) return <div>Cargando...</div>;
@@ -142,15 +173,45 @@ const Settings: React.FC = () => {
           <Card title="Cambiar Contraseña">
             <div className="space-y-4">
               <p className="text-sm text-gray-600">
-                Para cambiar tu contraseña, te enviaremos un enlace seguro a tu correo electrónico. Haz clic en el botón para iniciar el proceso.
+                Para cambiar tu contraseña, contacta al administrador del sistema.
               </p>
               <div className="text-right">
                 <Button onClick={handlePasswordResetRequest} isLoading={isPasswordResetSending}>
-                  Enviar enlace de recuperación
+                  Solicitar cambio de contraseña
                 </Button>
               </div>
             </div>
           </Card>
+
+          {user?.role === 'superadmin' && (
+            <Card title="Configuración del Sistema">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
+                  <div>
+                    <h3 className="font-medium text-gray-900">Permitir múltiples entradas/salidas</h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Si está deshabilitado: solo 1 entrada y 1 salida diaria por empleado
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Si está habilitado: empleados pueden marcar múltiples jornadas el mismo día
+                    </p>
+                  </div>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allowMultipleAttendance}
+                      onChange={handleToggleMultipleAttendance}
+                      disabled={isSavingSettings}
+                      className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 italic">
+                  Estado actual: {allowMultipleAttendance ? '✅ Habilitado' : '❌ Deshabilitado'}
+                </p>
+              </div>
+            </Card>
+          )}
         </div>
       </div>
     </div>

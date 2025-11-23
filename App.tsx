@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { User, Employee, AttendanceRecord, AuthState, LeaveRequest, ManagedUser, Role, Permission } from './types'; // Importar Role y Permission
+import { User, Employee, AttendanceRecord, AuthState, LeaveRequest, ManagedUser, Role, Permission } from './types';
 import { Layout } from './components/Layout';
 import { supabase } from './src/integrations/supabase/client';
 import { ToastProvider } from './src/components/ToastProvider';
+import { apiClient } from './src/services/apiClient';
+import { useSocket } from './src/hooks/useSocket';
 import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 import { SidebarProvider } from './src/context/SidebarContext';
 import { PermissionsProvider } from './src/context/PermissionsContext';
-import { ProtectedRoute } from './src/components/ProtectedRoute';
 
 // Pages
 import Login from './pages/Login';
@@ -26,6 +27,7 @@ import RolePermissionManagement from './src/pages/RolePermissionManagement'; // 
 // Context for global state
 export const AppContext = React.createContext<{
   authState: AuthState;
+  setAuthState: (state: AuthState) => void;
   employees: Employee[];
   records: AttendanceRecord[];
   leaveRequests: LeaveRequest[];
@@ -49,26 +51,57 @@ const App: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
-  const [users, setUsers] = useState<ManagedUser[]>([]); // Nuevo estado para usuarios
+  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [isAppDataLoading, setIsAppDataLoading] = useState(false);
 
+  // Flags para evitar llamadas simultáneas
+  const isFetchingRef = React.useRef({ records: false, employees: false, leaveRequests: false, users: false });
+
   const fetchEmployees = useCallback(async () => {
-    const { data, error } = await supabase.from('employees').select('*').order('nombre', { ascending: true });
-    if (!error) setEmployees(data || []);
-    else console.error("Error fetching employees:", error);
+    if (isFetchingRef.current.employees) return;
+    isFetchingRef.current.employees = true;
+
+    try {
+      const data = await apiClient.get('/employees');
+      setEmployees(data || []);
+      console.log("fetchEmployees: Successfully fetched employees.", data);
+    } catch (error) {
+      console.error("fetchEmployees: Error fetching employees:", error);
+    } finally {
+      isFetchingRef.current.employees = false;
+    }
   }, []);
 
   const fetchRecords = useCallback(async () => {
-    const { data, error } = await supabase.from('attendance_records').select('*').order('created_at', { ascending: false });
-    if (!error) setRecords(data || []);
-    else console.error("Error fetching records:", error);
+    if (isFetchingRef.current.records) return;
+    isFetchingRef.current.records = true;
+
+    try {
+      const data = await apiClient.get('/attendance');
+      setRecords(data || []);
+      console.log("fetchRecords: Successfully fetched attendance records.", data);
+    } catch (error) {
+      console.error("fetchRecords: Error fetching attendance records:", error);
+    } finally {
+      isFetchingRef.current.records = false;
+    }
   }, []);
 
   const fetchLeaveRequests = useCallback(async () => {
-    const { data, error } = await supabase.from('leave_requests').select('*').order('requested_at', { ascending: false });
-    if (!error) setLeaveRequests(data || []);
-    else console.error("Error fetching leave requests:", error);
+    // Evitar llamadas simultáneas
+    if (isFetchingRef.current.leaveRequests) return;
+    isFetchingRef.current.leaveRequests = true;
+
+    try {
+      const data = await apiClient.get('/leave-requests');
+      setLeaveRequests(data || []);
+      console.log("fetchLeaveRequests: Successfully fetched leave requests.", data);
+    } catch (error) {
+      console.error("fetchLeaveRequests: Error fetching leave requests:", error);
+    } finally {
+      isFetchingRef.current.leaveRequests = false;
+    }
   }, []);
 
   // Nueva función para cargar usuarios desde la función Edge
@@ -80,16 +113,12 @@ const App: React.FC = () => {
       return;
     }
     try {
-      console.log("fetchUsers: Attempting to fetch users from edge function.");
-      const { data, error: invokeError } = await supabase.functions.invoke('manage-users', {
-        method: 'GET',
-      });
-      if (invokeError) throw invokeError;
-      if (data.error) throw new Error(data.error);
+      console.log("fetchUsers: Attempting to fetch users from API.");
+      const data = await apiClient.get('/users');
       setUsers(data);
       console.log("fetchUsers: Successfully fetched users.", data);
     } catch (err: any) {
-      console.error("fetchUsers: Error fetching users from edge function:", err.message);
+      console.error("fetchUsers: Error fetching users:", err.message);
       setUsers([]); // Limpiar usuarios en caso de error
     }
   }, [authState.isAuthenticated, authState.user?.role]); // Dependencias para estabilidad
@@ -106,7 +135,7 @@ const App: React.FC = () => {
     if (session?.user) {
       console.log("Auth Flow (refreshUser): Session user found. User ID:", session.user.id);
       const { data: profile, error: profileError } = await supabase.from('profiles').select('*, roles(name)').eq('id', session.user.id).single();
-      
+
       if (profileError) {
         console.error("Auth Flow (refreshUser): Error fetching profile during refresh:", profileError);
         setAuthState({ isAuthenticated: false, user: null });
@@ -139,6 +168,33 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Restaurar sesión desde localStorage al cargar
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+          // Verificar que el token sea válido llamando a /auth/me
+          const user = await apiClient.getCurrentUser();
+          setAuthState({
+            isAuthenticated: true,
+            user: user as any,
+          });
+          console.log("Auth Flow (restoreSession): Session restored from localStorage");
+        }
+      } catch (error) {
+        console.error("Auth Flow (restoreSession): Error restoring session:", error);
+        setAuthState({ isAuthenticated: false, user: null });
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+      } finally {
+        setIsSessionLoading(false);
+      }
+    };
+
+    restoreSession();
+  }, []);
+
   // Cargar datos de la aplicación cuando el usuario se autentica
   useEffect(() => {
     const loadAppData = async () => {
@@ -168,7 +224,7 @@ const App: React.FC = () => {
         if (session) {
           console.log("Auth Flow (onAuthStateChange): Session found. User ID:", session.user.id);
           const { data: profile, error: profileError } = await supabase.from('profiles').select('*, roles(name)').eq('id', session.user.id).single();
-          
+
           if (profileError) {
             console.error("Auth Flow (onAuthStateChange): Error fetching profile:", profileError);
             throw profileError;
@@ -241,45 +297,98 @@ const App: React.FC = () => {
     };
   }, [authState.isAuthenticated, fetchRecords, fetchEmployees, refreshUser, authState.user?.id, fetchLeaveRequests, fetchUsers]);
 
+  // 🔌 WebSocket - Escuchar eventos en tiempo real
+  const { isConnected, on, off } = useSocket();
+
+  useEffect(() => {
+    if (!authState.isAuthenticated || !isConnected) return;
+
+    console.log('🔌 Configurando listeners de WebSocket...');
+
+    // Evento: Nueva asistencia registrada
+    on('attendance:new', (data) => {
+      console.log('📍 Nueva asistencia en tiempo real:', data);
+      // Pequeño delay para asegurar que el backend procesó correctamente
+      setTimeout(() => fetchRecords(), 100);
+      toast.success(`${data.employee_name} - ${data.tipo === 'entrada' ? 'Entrada' : 'Salida'} registrada`);
+    });
+
+    // Evento: Nueva solicitud de ausencia
+    on('leave-request:new', (data) => {
+      console.log('📋 Nueva solicitud de ausencia:', data);
+      fetchLeaveRequests();
+      toast.success('Nueva solicitud de ausencia recibida');
+    });
+
+    // Evento: Solicitud de ausencia actualizada
+    on('leave-request:updated', () => {
+      console.log('📋 Solicitud de ausencia actualizada');
+      fetchLeaveRequests();
+      toast.success('Solicitud actualizada');
+    });
+
+    // Evento: Empleado actualizado
+    on('employee:updated', () => {
+      console.log('👤 Empleado actualizado');
+      fetchEmployees();
+    });
+
+    return () => {
+      off('attendance:new');
+      off('leave-request:new');
+      off('leave-request:updated');
+      off('leave-request:updated');
+      off('employee:updated');
+    };
+  }, [isConnected, authState.isAuthenticated, on, off, fetchRecords, fetchLeaveRequests, fetchEmployees]);
+
   const logout = useCallback(async () => {
     console.log("logout: Signing out user.");
-    await supabase.auth.signOut();
+    try {
+      await apiClient.logout();
+    } catch (error) {
+      console.error("logout: Error during logout:", error);
+    }
+    // Limpiar estado local
     setAuthState({ isAuthenticated: false, user: null });
   }, []);
 
   const addRecord = useCallback(async (cedula: string, metodo: 'manual' | 'qr', tipo?: 'entrada' | 'salida') => {
-    const { data, error } = await supabase.rpc('register_attendance', {
-      p_cedula: cedula,
-      p_metodo: metodo,
-      p_tipo: tipo,
-    });
-
-    if (error) {
-      console.error("addRecord: Error in RPC register_attendance:", error);
-      return { success: false, message: 'Error al procesar el registro.' };
+    try {
+      const response = await apiClient.post('/attendance/record', {
+        cedula,
+        metodo,
+        tipo,
+      });
+      return response;
+    } catch (error: any) {
+      console.error("addRecord: Error recording attendance:", error);
+      return { success: false, message: error.message || 'Error al procesar el registro.' };
     }
-    
-    return data;
   }, []);
 
   const addEmployee = useCallback(async (emp: Partial<Employee>) => {
-    const { error } = await supabase.from('employees').insert(emp);
-    return { error };
+    try {
+      const data = await apiClient.post('/employees', emp);
+      return { error: null, data };
+    } catch (error: any) {
+      return { error: error.message };
+    }
   }, []);
 
   const updateEmployee = useCallback(async (id: string, emp: Partial<Employee>) => {
     const { id: _, ...updateData } = emp;
-    const { error } = await supabase.from('employees').update(updateData).eq('id', id);
-    return { error };
+    try {
+      const data = await apiClient.patch(`/employees/${id}`, updateData);
+      return { error: null, data };
+    } catch (error: any) {
+      return { error: { message: error.message || 'Error desconocido' } };
+    }
   }, []);
 
   const deleteAllAttendanceRecords = useCallback(async () => {
     try {
-      const { data, error: invokeError } = await supabase.functions.invoke('manage-attendance', {
-        method: 'DELETE',
-      });
-      if (invokeError) throw invokeError;
-      if (data?.error) throw new Error(data.error);
+      const data = await apiClient.delete('/attendance');
       toast.success(data.message);
       await fetchRecords(); // Refrescar los registros después de la eliminación
       return { success: true, message: data.message };
@@ -290,7 +399,7 @@ const App: React.FC = () => {
     }
   }, [fetchRecords]);
 
-  const contextValue = useMemo(() => ({ authState, employees, records, leaveRequests, users, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers, refreshUser, deleteAllAttendanceRecords }), [authState, employees, records, leaveRequests, users, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers, refreshUser, deleteAllAttendanceRecords]);
+  const contextValue = useMemo(() => ({ authState, setAuthState, employees, records, leaveRequests, users, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers, refreshUser, deleteAllAttendanceRecords }), [authState, employees, records, leaveRequests, users, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers, refreshUser, deleteAllAttendanceRecords]);
 
   return (
     <AppContext.Provider value={contextValue}>
@@ -319,30 +428,14 @@ const AppRoutes = () => {
       <Route path="/login" element={!authState.isAuthenticated ? <Login /> : <Navigate to="/admin/dashboard" />} />
       <Route path="/request-leave" element={<PublicLeaveRequest />} />
       <Route path="/admin" element={authState.isAuthenticated ? <SidebarProvider><PermissionsProvider><Layout /></PermissionsProvider></SidebarProvider> : <Navigate to="/login" />}>
-        <Route element={<ProtectedRoute permission="dashboard:view" />}>
-          <Route path="dashboard" element={<Dashboard />} />
-        </Route>
-        <Route element={<ProtectedRoute permission="employees:view" />}>
-          <Route path="employees" element={<EmployeeManager />} />
-        </Route>
-        <Route element={<ProtectedRoute permission="leave_requests:view" />}>
-          <Route path="leave-requests" element={<LeaveRequestsManagement />} />
-        </Route>
-        <Route element={<ProtectedRoute permission="overtime:view" />}>
-          <Route path="overtime" element={<OvertimeReport />} />
-        </Route>
-        <Route element={<ProtectedRoute permission="users:view" />}>
-          <Route path="users" element={<UserManagement />} />
-        </Route>
-        <Route element={<ProtectedRoute permission="roles_permissions:manage" />}> {/* Nueva ruta protegida */}
-          <Route path="roles-permissions" element={<RolePermissionManagement />} />
-        </Route>
-        <Route element={<ProtectedRoute permission="settings:view" />}>
-          <Route path="settings" element={<Settings />} />
-        </Route>
-        <Route element={<ProtectedRoute permission="reports:view" />}>
-          <Route path="reports" element={<Reports />} />
-        </Route>
+        <Route path="dashboard" element={<Dashboard />} />
+        <Route path="employees" element={<EmployeeManager />} />
+        <Route path="leave-requests" element={<LeaveRequestsManagement />} />
+        <Route path="overtime" element={<OvertimeReport />} />
+        <Route path="users" element={<UserManagement />} />
+        <Route path="roles-permissions" element={<RolePermissionManagement />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="reports" element={<Reports />} />
         <Route index element={<Navigate to="/admin/dashboard" />} />
       </Route>
       <Route path="*" element={<Navigate to="/" />} />

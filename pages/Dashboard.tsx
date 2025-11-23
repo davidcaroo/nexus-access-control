@@ -15,30 +15,37 @@ const Dashboard: React.FC = () => {
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    const todaysRecords = records.filter(r => r.fecha === today);
+    const todaysRecords = records.filter(r => {
+      // Normalizar fecha para comparación
+      const recordDate = new Date(r.fecha).toISOString().split('T')[0];
+      return recordDate === today;
+    });
 
-    const presentTodayIds = new Set(todaysRecords.filter(r => r.tipo === 'entrada').map(r => r.employee_id));
-    const presentCount = presentTodayIds.size;
-
+    // Calcular estado actual de cada empleado (último registro del día)
     const employeeLastStatus = new Map<string, 'entrada' | 'salida'>();
     const sortedTodaysRecords = [...todaysRecords].sort((a, b) => a.hora.localeCompare(b.hora));
-    
+
     for (const record of sortedTodaysRecords) {
       employeeLastStatus.set(record.employee_id, record.tipo);
     }
 
+    // Contar empleados PRESENTES AHORA (última acción fue entrada, no salida)
     const onSiteCount = Array.from(employeeLastStatus.values()).filter(status => status === 'entrada').length;
 
+    // Contar empleados que vinieron HOY (marcaron entrada en algún momento)
+    const presentTodayIds = new Set(todaysRecords.filter(r => r.tipo === 'entrada').map(r => r.employee_id));
+    const presentCount = presentTodayIds.size;
+
     const totalEmployees = employees.length;
-    const absentCount = totalEmployees - presentCount;
+    const absentCount = totalEmployees - presentCount; // Ausentes = Total - Vinieron hoy
     const lates = todaysRecords.filter(r => r.tardanza && r.tipo === 'entrada').length;
 
-    // --- Debugging Logs ---
+    console.log("Dashboard Stats: Today's date:", today);
     console.log("Dashboard Stats: Today's records:", todaysRecords);
-    console.log("Dashboard Stats: Employee last status (for on-site calculation):", employeeLastStatus);
-    console.log("Dashboard Stats: Calculated onSiteCount (employees whose last record is 'entrada'):", onSiteCount);
-    console.log("Dashboard Stats: Calculated lates (entry records marked as tardy):", lates);
-    // --- End Debugging Logs ---
+    console.log("Dashboard Stats: Employee last status:", employeeLastStatus);
+    console.log("Dashboard Stats: Presentes ahora (entrada):", onSiteCount);
+    console.log("Dashboard Stats: Vinieron hoy:", presentCount);
+    console.log("Dashboard Stats: Ausentes:", absentCount);
 
     return { totalEmployees, presentCount, onSiteCount, absentCount, lates };
   }, [employees, records]);
@@ -61,13 +68,13 @@ const Dashboard: React.FC = () => {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Total Personal" value={stats.totalEmployees} icon={<Users className="text-blue-600" />} />
-        <StatCard title="Presentes Hoy" value={stats.presentCount} icon={<UserCheck className="text-emerald-600" />} subtext={`${((stats.presentCount/stats.totalEmployees)*100 || 0).toFixed(0)}% asistencia`} />
+        <StatCard title="Presentes Hoy" value={stats.onSiteCount} icon={<UserCheck className="text-emerald-600" />} subtext={`${((stats.onSiteCount / stats.totalEmployees) * 100 || 0).toFixed(0)}% asistencia`} />
         <StatCard title="Ausentes" value={stats.absentCount} icon={<UserX className="text-red-600" />} />
-        <StatCard 
-          title="Tardanzas" 
-          value={stats.lates} 
-          icon={<Clock className="text-amber-600" />} 
-          subtext="Entradas registradas después del horario" 
+        <StatCard
+          title="Tardanzas"
+          value={stats.lates}
+          icon={<Clock className="text-amber-600" />}
+          subtext="Entradas registradas después del horario"
         />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -107,9 +114,9 @@ const Dashboard: React.FC = () => {
           </div>
         </Card>
       </div>
-      <ManualAttendanceModal 
-        isOpen={isManualModalOpen} 
-        onClose={() => setIsManualModalOpen(false)} 
+      <ManualAttendanceModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
       />
     </div>
   );

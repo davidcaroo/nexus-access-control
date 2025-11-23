@@ -11,7 +11,7 @@ const EmployeeManager: React.FC = () => {
   const { employees, addEmployee, updateEmployee, fetchEmployees } = useContext(AppContext)!;
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   const [formData, setFormData] = useState<Partial<Employee>>({});
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -25,7 +25,7 @@ const EmployeeManager: React.FC = () => {
   const [showQrModal, setShowQrModal] = useState(false);
   const [selectedEmployeeForQr, setSelectedEmployeeForQr] = useState<Employee | null>(null);
 
-  const filteredEmployees = employees.filter(e => 
+  const filteredEmployees = employees.filter(e =>
     e.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
     e.cedula.includes(searchTerm) ||
     e.departamento?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -55,7 +55,7 @@ const EmployeeManager: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nombre || !formData.cedula) return;
-    
+
     setIsSaving(true);
 
     try {
@@ -72,7 +72,8 @@ const EmployeeManager: React.FC = () => {
         : await addEmployee(dataToSave);
 
       if (result.error) {
-        toast.error(`Error al guardar: ${result.error.message}`);
+        const errorMessage = result.error?.message || result.error?.error || 'Error al guardar';
+        toast.error(`Error al guardar: ${errorMessage}`);
       } else {
         toast.success(isEditing ? 'Empleado actualizado correctamente' : 'Empleado registrado correctamente');
         await fetchEmployees(); // Forzar la recarga de empleados para actualizar la UI
@@ -93,33 +94,28 @@ const EmployeeManager: React.FC = () => {
     setIsUploading(true);
     setAnalysisError('');
 
-    const filePath = `public/${Date.now()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage.from('employee_photos').upload(filePath, file);
-
-    if (uploadError) {
-      setAnalysisError("Error al subir la imagen.");
-      setIsUploading(false);
-      return;
-    }
-
-    const { data: { publicUrl } } = supabase.storage.from('employee_photos').getPublicUrl(filePath);
-    setFormData(prev => ({ ...prev, foto: publicUrl }));
-
-    if (skipAnalysis) {
-      setIsUploading(false);
-      toast.success('Foto actualizada. Guarde los cambios para confirmar.');
-      return;
-    }
-
+    // Leer archivo como base64
     const reader = new FileReader();
     reader.onloadend = async () => {
       const base64 = reader.result as string;
+
       try {
+        // Guardar base64 directamente en el formulario (sin subir al servidor)
+        setFormData(prev => ({ ...prev, foto: base64 }));
+
+        if (skipAnalysis) {
+          setIsUploading(false);
+          toast.success('Foto cargada. Guarde los cambios para confirmar.');
+          return;
+        }
+
+        // Analizar con IA usando la imagen base64
         const result = await analyzeIDCard(base64);
         setFormData(prev => ({
           ...prev,
           nombre: result.nombre || prev.nombre,
           cedula: result.cedula || prev.cedula,
+          foto: base64,
         }));
         if (!result.nombre && !result.cedula) {
           setAnalysisError("No se pudo extraer información. Ingrese los datos manualmente.");
@@ -130,7 +126,7 @@ const EmployeeManager: React.FC = () => {
         setIsUploading(false);
       }
     };
-    reader.readDataURL(file);
+    reader.readAsDataURL(file);
   };
 
   const handleBulkUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -138,7 +134,7 @@ const EmployeeManager: React.FC = () => {
     if (!file) return;
 
     setIsBulkUploading(true);
-    
+
     try {
       const text = await file.text();
       const rows = text.split('\n').filter(row => row.trim() !== '');
@@ -152,7 +148,7 @@ const EmployeeManager: React.FC = () => {
       const parsedEmployees = rows.map(row => {
         const values = row.split(',').map(v => v.trim());
         if (values.length < 4 || !values[0] || !values[1]) return null;
-        
+
         const nombre = values[0];
         const cedula = values[1];
         return {
@@ -256,7 +252,7 @@ const EmployeeManager: React.FC = () => {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        
+
         const employeeName = selectedEmployeeForQr.nombre.replace(/[^a-zA-Z0-9]/g, '');
         const employeeId = selectedEmployeeForQr.cedula;
         const filename = `${employeeName}-${employeeId}.png`;
@@ -292,9 +288,9 @@ const EmployeeManager: React.FC = () => {
       <Card>
         <div className="p-4 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <Input placeholder="Buscar por nombre, cédula o departamento..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full sm:max-w-sm" />
-          <a href="data:text/csv;charset=utf-8,Nombre%20Completo,C%C3%A9dula,Cargo,Departamento%0AJuan%20Perez,123456,Desarrollador,Tecnolog%C3%ADa" 
-             download="plantilla_empleados.csv" 
-             className="text-sm text-blue-600 hover:underline self-end sm:self-auto">
+          <a href="data:text/csv;charset=utf-8,Nombre%20Completo,C%C3%A9dula,Cargo,Departamento%0AJuan%20Perez,123456,Desarrollador,Tecnolog%C3%ADa"
+            download="plantilla_empleados.csv"
+            className="text-sm text-blue-600 hover:underline self-end sm:self-auto">
             Descargar plantilla CSV
           </a>
         </div>
@@ -342,13 +338,13 @@ const EmployeeManager: React.FC = () => {
                 )}
               </div>
               <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input label="Cédula / ID *" value={formData.cedula || ''} onChange={e => setFormData({...formData, cedula: e.target.value})} required />
-                <Input label="Nombre Completo *" value={formData.nombre || ''} onChange={e => setFormData({...formData, nombre: e.target.value})} required />
-                <Input label="Cargo" value={formData.cargo || ''} onChange={e => setFormData({...formData, cargo: e.target.value})} />
-                <Input label="Departamento" value={formData.departamento || ''} onChange={e => setFormData({...formData, departamento: e.target.value})} />
-                <Input label="Hora Entrada" type="time" value={formData.horario_entrada || '09:00'} onChange={e => setFormData({...formData, horario_entrada: e.target.value })} />
-                <Input label="Hora Salida" type="time" value={formData.horario_salida || '18:00'} onChange={e => setFormData({...formData, horario_salida: e.target.value })} />
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Estado</label><select className="w-full px-3 py-2 border border-gray-300 rounded-lg" value={formData.estado} onChange={e => setFormData({...formData, estado: e.target.value as any})}><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></div>
+                <Input label="Cédula / ID *" value={formData.cedula || ''} onChange={e => setFormData({ ...formData, cedula: e.target.value })} required />
+                <Input label="Nombre Completo *" value={formData.nombre || ''} onChange={e => setFormData({ ...formData, nombre: e.target.value })} required />
+                <Input label="Cargo" value={formData.cargo || ''} onChange={e => setFormData({ ...formData, cargo: e.target.value })} />
+                <Input label="Departamento" value={formData.departamento || ''} onChange={e => setFormData({ ...formData, departamento: e.target.value })} />
+                <Input label="Hora Entrada" type="time" value={formData.horario_entrada || '09:00'} onChange={e => setFormData({ ...formData, horario_entrada: e.target.value })} />
+                <Input label="Hora Salida" type="time" value={formData.horario_salida || '18:00'} onChange={e => setFormData({ ...formData, horario_salida: e.target.value })} />
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Estado</label><select className="w-full px-3 py-2 border border-gray-300 rounded-lg" value={formData.estado} onChange={e => setFormData({ ...formData, estado: e.target.value as any })}><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></div>
               </div>
             </div>
             <div className="pt-4 border-t flex justify-end gap-3"><Button type="button" variant="secondary" onClick={handleCloseModal}>Cancelar</Button><Button type="submit" isLoading={isSaving}>{isEditing ? 'Guardar Cambios' : 'Registrar Empleado'}</Button></div>

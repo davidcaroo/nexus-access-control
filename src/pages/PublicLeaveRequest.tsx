@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Button, Input, Card } from '../../components/UIComponents'; // Ruta corregida
-import { supabase } from '../integrations/supabase/client';
+import { Button, Input, Card } from '../../components/UIComponents';
+import { apiClient } from '../services/apiClient';
 import toast from 'react-hot-toast';
-import { CalendarDays, User, Mail } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 
 const PublicLeaveRequest: React.FC = () => {
   const [cedula, setCedula] = useState('');
@@ -27,21 +27,18 @@ const PublicLeaveRequest: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      const { data, error } = await supabase.rpc('submit_leave_request', {
-        p_cedula: cedula,
-        p_employee_name: employeeName,
-        p_request_type: requestType,
-        p_start_date: startDate,
-        p_end_date: endDate,
-        p_reason: reason,
+      // Crear solicitud en el backend
+      const response = await apiClient.post('/leave-requests', {
+        cedula,
+        employee_name: employeeName,
+        request_type: requestType,
+        start_date: startDate,
+        end_date: endDate,
+        reason: reason || null,
       });
 
-      if (error) {
-        throw error;
-      }
-
-      if (data.success) {
-        toast.success(data.message);
+      if (response) {
+        toast.success('Solicitud enviada correctamente. Será revisada por el administrador.');
         // Limpiar formulario
         setCedula('');
         setEmployeeName('');
@@ -49,8 +46,6 @@ const PublicLeaveRequest: React.FC = () => {
         setStartDate('');
         setEndDate('');
         setReason('');
-      } else {
-        toast.error(data.message);
       }
     } catch (err: any) {
       console.error('Error al enviar solicitud:', err);

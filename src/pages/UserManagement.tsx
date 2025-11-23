@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { supabase } from '../integrations/supabase/client';
+import { apiClient } from '../services/apiClient';
 import { ManagedUser, Role, RoleName } from '../../types'; // Importar ManagedUser y RoleName
 import { Card, Button, Badge, Input } from '../../components/UIComponents';
 import { Plus, Edit, Trash2, X, UserX, UserCheck } from 'lucide-react';
@@ -9,7 +10,7 @@ import { AppContext } from '../../App'; // Importar AppContext
 
 const UserManagement: React.FC = () => {
   const { users, isAppDataLoading, fetchUsers } = useContext(AppContext)!; // Obtener users, isAppDataLoading y fetchUsers del contexto
-  
+
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentUser, setCurrentUser] = useState<ManagedUser | null>(null);
@@ -36,11 +37,7 @@ const UserManagement: React.FC = () => {
   const fetchAvailableRoles = useCallback(async () => {
     setIsLoadingRoles(true);
     try {
-      const { data, error: invokeError } = await supabase.functions.invoke('manage-roles-permissions/roles', {
-        method: 'GET',
-      });
-      if (invokeError) throw invokeError;
-      if (data?.error) throw new Error(data.error);
+      const data = await apiClient.get('/roles');
       setAvailableRoles(data);
     } catch (err: any) {
       console.error("Error fetching available roles:", err.message);
@@ -81,22 +78,22 @@ const UserManagement: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    
+
     const payload: any = isEditing
       ? { id: currentUser!.id, ...formData }
       : formData;
-    
+
     if (isEditing && !payload.password) {
       delete payload.password;
     }
 
     try {
-      const { data, error: invokeError } = await supabase.functions.invoke('manage-users', {
-        method: isEditing ? 'PUT' : 'POST',
-        body: payload,
-      });
-      if (invokeError) throw invokeError;
-      if (data?.error) throw new Error(data.error);
+      if (isEditing) {
+        const { id, ...updateData } = payload;
+        await apiClient.patch(`/users/${id}`, updateData);
+      } else {
+        await apiClient.post('/users', payload);
+      }
       toast.success(`Usuario ${isEditing ? 'actualizado' : 'creado'} correctamente.`);
       await fetchUsers(); // Refrescar la lista de usuarios desde el contexto
       handleCloseModal();
@@ -116,11 +113,7 @@ const UserManagement: React.FC = () => {
     if (!userToDelete) return;
     setIsDeleting(true);
     try {
-      const { error: invokeError } = await supabase.functions.invoke('manage-users', {
-        method: 'DELETE',
-        body: { id: userToDelete.id },
-      });
-      if (invokeError) throw invokeError;
+      await apiClient.delete(`/users/${userToDelete.id}`);
       toast.success('Usuario eliminado correctamente.');
       await fetchUsers(); // Refrescar la lista de usuarios desde el contexto
       setIsDeleteModalOpen(false);
@@ -142,12 +135,7 @@ const UserManagement: React.FC = () => {
     setIsBanning(true);
     const action = userToBan.is_banned ? 'desbloquear' : 'bloquear';
     try {
-      const { data, error: invokeError } = await supabase.functions.invoke('manage-users', {
-        method: 'PUT',
-        body: { id: userToBan.id, is_banned: !userToBan.is_banned },
-      });
-      if (invokeError) throw invokeError;
-      if (data?.error) throw new Error(data.error);
+      await apiClient.patch(`/users/${userToBan.id}`, { is_banned: !userToBan.is_banned });
       toast.success(`Usuario ${action === 'bloquear' ? 'bloqueado' : 'desbloqueado'} correctamente.`);
       await fetchUsers(); // Refrescar la lista de usuarios desde el contexto
     } catch (err: any) {
@@ -198,8 +186,8 @@ const UserManagement: React.FC = () => {
                     </Badge>
                   </td>
                   <td className="px-4 py-3">
-                    {user.is_banned 
-                      ? <Badge color="red">Bloqueado</Badge> 
+                    {user.is_banned
+                      ? <Badge color="red">Bloqueado</Badge>
                       : <Badge color="green">Activo</Badge>}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -226,12 +214,12 @@ const UserManagement: React.FC = () => {
               <button onClick={handleCloseModal}><X size={20} /></button>
             </div>
             <form onSubmit={handleSave} className="p-6 space-y-4">
-              <Input label="Nombre Completo" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} required />
-              <Input label="Email" type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
-              <Input label={isEditing ? "Nueva Contraseña (opcional)" : "Contraseña"} type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required={!isEditing} />
+              <Input label="Nombre Completo" value={formData.full_name} onChange={e => setFormData({ ...formData, full_name: e.target.value })} required />
+              <Input label="Email" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} required />
+              <Input label={isEditing ? "Nueva Contraseña (opcional)" : "Contraseña"} type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} required={!isEditing} />
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as RoleName})}>
+                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as RoleName })}>
                   {availableRoles.map(role => (
                     <option key={role.id} value={role.name}>
                       {role.name}

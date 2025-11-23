@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
-import { supabase } from '../integrations/supabase/client';
+import { apiClient } from '../services/apiClient';
 import { AppContext } from '../../App';
 
 interface PermissionsContextType {
@@ -23,16 +23,27 @@ export const PermissionsProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('get_my_permissions');
-      if (error) throw error;
-      setPermissions(data || []);
+      // Para superadmin, dar todos los permisos
+      if (authState.user?.role === 'superadmin') {
+        setPermissions([
+          'employees:read', 'employees:create', 'employees:update', 'employees:delete',
+          'attendance:view', 'attendance:record', 'attendance:delete',
+          'leave_requests:view', 'leave_requests:create', 'leave_requests:approve', 'leave_requests:reject',
+          'users:read', 'users:create', 'users:update', 'users:delete', 'users:ban',
+          'roles:manage', 'permissions:manage'
+        ]);
+      } else {
+        // Para otros roles, obtener permisos del backend
+        const data = await apiClient.get('/auth/me/permissions');
+        setPermissions(data || []);
+      }
     } catch (error) {
       console.error("Error fetching permissions:", error);
       setPermissions([]);
     } finally {
       setLoading(false);
     }
-  }, [authState.isAuthenticated]);
+  }, [authState.isAuthenticated, authState.user?.role]);
 
   useEffect(() => {
     fetchPermissions();
