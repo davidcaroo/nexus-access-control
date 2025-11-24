@@ -43,6 +43,8 @@ export const AppContext = React.createContext<{
   addRecord: (cedula: string, metodo: 'manual' | 'qr', tipo?: 'entrada' | 'salida') => Promise<{ success: boolean; message: string; employee?: Employee }>;
   addEmployee: (emp: Partial<Employee>) => Promise<{ error: any }>;
   updateEmployee: (id: string, emp: Partial<Employee>) => Promise<{ error: any }>;
+  deleteEmployee: (id: string) => Promise<{ success: boolean; message: string }>;
+  deleteAllEmployees: () => Promise<{ success: boolean; message: string }>;
   deleteAllAttendanceRecords: () => Promise<{ success: boolean; message: string }>; // Nueva función
 } | null>(null);
 
@@ -386,6 +388,28 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const deleteEmployee = useCallback(async (id: string) => {
+    try {
+      const data = await apiClient.delete(`/employees/${id}`);
+      await fetchEmployees();
+      return { success: true, message: data.message };
+    } catch (error: any) {
+      console.error("Error deleting employee:", error.message);
+      return { success: false, message: error.message || 'Error al eliminar el empleado' };
+    }
+  }, [fetchEmployees]);
+
+  const deleteAllEmployees = useCallback(async () => {
+    try {
+      const data = await apiClient.delete('/employees');
+      await fetchEmployees();
+      return { success: true, message: data.message };
+    } catch (error: any) {
+      console.error("Error deleting all employees:", error.message);
+      return { success: false, message: error.message || 'Error al eliminar todos los empleados' };
+    }
+  }, [fetchEmployees]);
+
   const deleteAllAttendanceRecords = useCallback(async () => {
     try {
       const data = await apiClient.delete('/attendance');
@@ -399,7 +423,7 @@ const App: React.FC = () => {
     }
   }, [fetchRecords]);
 
-  const contextValue = useMemo(() => ({ authState, setAuthState, employees, records, leaveRequests, users, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers, refreshUser, deleteAllAttendanceRecords }), [authState, employees, records, leaveRequests, users, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers, refreshUser, deleteAllAttendanceRecords]);
+  const contextValue = useMemo(() => ({ authState, setAuthState, employees, records, leaveRequests, users, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, deleteEmployee, deleteAllEmployees, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers, refreshUser, deleteAllAttendanceRecords }), [authState, employees, records, leaveRequests, users, isSessionLoading, isAppDataLoading, logout, addRecord, addEmployee, updateEmployee, deleteEmployee, deleteAllEmployees, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers, refreshUser, deleteAllAttendanceRecords]);
 
   return (
     <AppContext.Provider value={contextValue}>

@@ -1,21 +1,26 @@
 import React, { useState, useContext, useRef } from 'react';
 import { AppContext } from '../App';
 import { Button, Input, Card, Badge } from '../components/UIComponents';
-import { Search, Plus, Upload, Sparkles, X, Camera, QrCode, FileUp } from 'lucide-react';
+import { Search, Plus, Upload, Sparkles, X, Camera, QrCode, FileUp, Trash2, AlertCircle, Download } from 'lucide-react';
 import { Employee } from '../types';
 import { analyzeIDCard } from '../services/geminiService';
 import { supabase } from '../src/integrations/supabase/client';
+import { usePermissions } from '../src/context/PermissionsContext';
 import toast from 'react-hot-toast';
 
 const EmployeeManager: React.FC = () => {
-  const { employees, addEmployee, updateEmployee, fetchEmployees } = useContext(AppContext)!;
+  const { employees, addEmployee, updateEmployee, deleteEmployee, deleteAllEmployees, fetchEmployees } = useContext(AppContext)!;
+  const { can } = usePermissions();
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-
-  const [formData, setFormData] = useState<Partial<Employee>>({});
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<'one' | 'all' | null>(null);
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [formData, setFormData] = useState<Partial<Employee>>({});
   const [isUploading, setIsUploading] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -223,6 +228,63 @@ const EmployeeManager: React.FC = () => {
     setSelectedEmployeeForQr(null);
   };
 
+  const handleOpenDeleteConfirm = (emp: Employee) => {
+    setEmployeeToDelete(emp);
+    setDeleteTarget('one');
+    setShowDeleteConfirm(true);
+  };
+
+  const handleOpenDeleteAllConfirm = () => {
+    setDeleteTarget('all');
+    setShowDeleteConfirm(true);
+  };
+
+  const handleCloseDeleteConfirm = () => {
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
+    setEmployeeToDelete(null);
+  };
+
+  const handleDeleteEmployee = async () => {
+    if (!employeeToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const result = await deleteEmployee(employeeToDelete.id);
+      if (result.success) {
+        toast.success(`Empleado "${employeeToDelete.nombre}" eliminado correctamente`);
+        await fetchEmployees();
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      toast.error('Error al eliminar el empleado');
+      console.error(error);
+    } finally {
+      setIsDeleting(false);
+      handleCloseDeleteConfirm();
+    }
+  };
+
+  const handleDeleteAllEmployees = async () => {
+    setIsDeleting(true);
+    try {
+      const result = await deleteAllEmployees();
+      if (result.success) {
+        toast.success('Todos los empleados han sido eliminados correctamente');
+        await fetchEmployees();
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      toast.error('Error al eliminar todos los empleados');
+      console.error(error);
+    } finally {
+      setIsDeleting(false);
+      handleCloseDeleteConfirm();
+    }
+  };
+
   const handlePrintQr = () => {
     if (selectedEmployeeForQr?.qr_code_url) {
       const printWindow = window.open('', '_blank');
@@ -276,12 +338,24 @@ const EmployeeManager: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-800">Gestión de Personal</h1>
           <p className="text-gray-500">Administre empleados y sus credenciales de acceso</p>
         </div>
-        <div className="flex gap-2 self-start sm:self-auto">
+        <div className="flex gap-2 self-start sm:self-auto flex-wrap">
           <input type="file" ref={bulkFileInputRef} className="hidden" accept=".csv" onChange={handleBulkUpload} />
-          <Button variant="outline" onClick={() => bulkFileInputRef.current?.click()} isLoading={isBulkUploading}>
+          <Button
+            className="bg-green-600 hover:bg-green-700 text-white border-0"
+            onClick={() => bulkFileInputRef.current?.click()}
+            isLoading={isBulkUploading}
+          >
             <FileUp size={18} className="mr-2" /> Carga Masiva
           </Button>
           <Button onClick={() => handleOpenModal()}><Plus size={18} className="mr-2" /> Nuevo Empleado</Button>
+          <Button
+            className="bg-red-600 hover:bg-red-700 text-white border-0"
+            onClick={handleOpenDeleteAllConfirm}
+            disabled={!can('employees:delete')}
+            title={!can('employees:delete') ? 'No tienes permisos para eliminar empleados' : 'Eliminar todos los empleados'}
+          >
+            <Trash2 size={18} className="mr-2" /> Eliminar Todos
+          </Button>
         </div>
       </div>
 
@@ -290,7 +364,8 @@ const EmployeeManager: React.FC = () => {
           <Input placeholder="Buscar por nombre, cédula o departamento..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full sm:max-w-sm" />
           <a href="data:text/csv;charset=utf-8,Nombre%20Completo,C%C3%A9dula,Cargo,Departamento%0AJuan%20Perez,123456,Desarrollador,Tecnolog%C3%ADa"
             download="plantilla_empleados.csv"
-            className="text-sm text-blue-600 hover:underline self-end sm:self-auto">
+            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm self-end sm:self-auto">
+            <Download size={16} />
             Descargar plantilla CSV
           </a>
         </div>
@@ -311,6 +386,15 @@ const EmployeeManager: React.FC = () => {
                     <div className="flex items-center justify-end gap-2">
                       <Button variant="outline" size="sm" onClick={() => handleOpenModal(emp)}>Editar</Button>
                       <Button variant="secondary" size="sm" onClick={() => handleOpenQrModal(emp)} title="Ver Código QR"><QrCode size={16} /></Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleOpenDeleteConfirm(emp)}
+                        disabled={!can('employees:delete')}
+                        title={!can('employees:delete') ? 'No tienes permisos para eliminar empleados' : 'Eliminar empleado'}
+                      >
+                        <Trash2 size={16} />
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -373,6 +457,87 @@ const EmployeeManager: React.FC = () => {
             <div className="p-4 border-t bg-gray-50 flex justify-end gap-2">
               <Button variant="secondary" onClick={handleDownloadQr}>Descargar</Button>
               <Button onClick={handlePrintQr}>Imprimir</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden transform transition-all">
+            {/* Header con fondo rojo sutil */}
+            <div className="bg-gradient-to-r from-red-50 to-orange-50 px-6 pt-6 pb-4 border-b border-red-100">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0">
+                  <div className="flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                    <AlertCircle className="h-6 w-6 text-red-600" />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">
+                    {deleteTarget === 'one' ? 'Confirmar Eliminación' : 'Eliminar Todos los Empleados'}
+                  </h3>
+                  <p className="text-sm text-red-600 font-semibold mt-1">Esta acción no se puede deshacer</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-6 space-y-4 bg-white">
+              {deleteTarget === 'one' && employeeToDelete && (
+                <>
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <p className="text-gray-700">
+                      <span className="text-sm text-gray-600">Está a punto de eliminar:</span>
+                      <div className="mt-2 flex items-center gap-3">
+                        <img src={employeeToDelete.foto} alt={employeeToDelete.nombre} className="w-10 h-10 rounded-full object-cover" />
+                        <div>
+                          <p className="font-semibold text-gray-900">{employeeToDelete.nombre}</p>
+                          <p className="text-sm text-gray-500">Cédula: {employeeToDelete.cedula}</p>
+                        </div>
+                      </div>
+                    </p>
+                  </div>
+                  <p className="text-sm text-gray-700">
+                    ¿Desea continuar? Una vez eliminado, todos los datos del empleado se perderán permanentemente.
+                  </p>
+                </>
+              )}
+              {deleteTarget === 'all' && (
+                <>
+                  <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                    <p className="text-gray-900 font-semibold">
+                      ⚠️ Operación Crítica
+                    </p>
+                    <p className="text-sm text-gray-700 mt-2">
+                      Se eliminarán <span className="font-bold text-red-600">{employees.length} empleados</span> de la base de datos.
+                    </p>
+                  </div>
+                  <p className="text-sm text-gray-700">
+                    Todos los registros, asistencias y datos asociados a estos empleados también serán eliminados permanentemente.
+                  </p>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={handleCloseDeleteConfirm}
+                disabled={isDeleting}
+                className="bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100"
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={deleteTarget === 'one' ? handleDeleteEmployee : handleDeleteAllEmployees}
+                isLoading={isDeleting}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {isDeleting ? 'Eliminando...' : 'Sí, Eliminar'}
+              </Button>
             </div>
           </div>
         </div>

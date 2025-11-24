@@ -221,12 +221,45 @@ router.patch('/:id', verifyToken, verifyAdminOrHR, async (req, res) => {
     }
 });
 
-// DELETE /api/employees/:id - Eliminar empleado
-router.delete('/:id', verifyToken, verifySuperAdmin, async (req, res) => {
+// DELETE /api/employees/:id - Eliminar un empleado
+router.delete('/:id', verifyToken, async (req, res) => {
     let connection;
     try {
         const { id } = req.params;
+        const userId = req.user.id;
+
         connection = await pool.getConnection();
+
+        // Verificar que el empleado existe
+        const [employees] = await connection.execute(
+            'SELECT id FROM employees WHERE id = ?',
+            [id]
+        );
+
+        if (employees.length === 0) {
+            connection.release();
+            return res.status(404).json({ error: 'Employee not found', message: 'Employee not found' });
+        }
+
+        // Obtener el rol del usuario
+        const [userRole] = await connection.execute(
+            'SELECT role_id FROM user_roles WHERE user_id = ?',
+            [userId]
+        );
+
+        const [role] = await connection.execute(
+            'SELECT name FROM roles WHERE id = ?',
+            [userRole[0]?.role_id]
+        );
+
+        const userRoleName = role[0]?.name;
+
+        // Superadmin puede eliminar cualquier empleado
+        // Admin y HR pueden eliminar empleados
+        if (userRoleName !== 'superadmin' && userRoleName !== 'admin' && userRoleName !== 'hr_manager') {
+            connection.release();
+            return res.status(403).json({ error: 'Forbidden', message: 'No tienes permisos para eliminar empleados' });
+        }
 
         await connection.execute(
             'DELETE FROM employees WHERE id = ?',
@@ -234,7 +267,7 @@ router.delete('/:id', verifyToken, verifySuperAdmin, async (req, res) => {
         );
 
         connection.release();
-        res.json({ message: 'Employee deleted' });
+        res.json({ message: 'Employee deleted successfully' });
     } catch (error) {
         if (connection) {
             try {
@@ -244,6 +277,52 @@ router.delete('/:id', verifyToken, verifySuperAdmin, async (req, res) => {
             }
         }
         console.error('Error deleting employee:', error);
+        res.status(500).json({ error: 'Internal server error', message: error.message || 'Internal server error' });
+    }
+});
+
+// DELETE /api/employees - Eliminar todos los empleados
+router.delete('/', verifyToken, async (req, res) => {
+    let connection;
+    try {
+        const userId = req.user.id;
+
+        connection = await pool.getConnection();
+
+        // Obtener el rol del usuario
+        const [userRole] = await connection.execute(
+            'SELECT role_id FROM user_roles WHERE user_id = ?',
+            [userId]
+        );
+
+        const [role] = await connection.execute(
+            'SELECT name FROM roles WHERE id = ?',
+            [userRole[0]?.role_id]
+        );
+
+        const userRoleName = role[0]?.name;
+
+        // Solo superadmin puede eliminar todos los empleados
+        if (userRoleName !== 'superadmin') {
+            connection.release();
+            return res.status(403).json({ error: 'Forbidden', message: 'Solo superadmins pueden eliminar todos los empleados' });
+        }
+
+        const [result] = await connection.execute(
+            'DELETE FROM employees'
+        );
+
+        connection.release();
+        res.json({ message: 'All employees deleted successfully', deleted: result.affectedRows });
+    } catch (error) {
+        if (connection) {
+            try {
+                connection.release();
+            } catch (e) {
+                console.error('Error releasing connection:', e);
+            }
+        }
+        console.error('Error deleting all employees:', error);
         res.status(500).json({ error: 'Internal server error', message: error.message || 'Internal server error' });
     }
 });
