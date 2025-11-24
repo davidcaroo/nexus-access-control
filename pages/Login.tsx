@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ScanLine } from 'lucide-react';
+import { ScanLine, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { AppContext } from '../App';
 import { apiClient } from '../src/services/apiClient';
@@ -12,6 +12,10 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
 
   useEffect(() => {
     if (authState.isAuthenticated) {
@@ -59,6 +63,36 @@ const Login: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail) {
+      toast.error('Por favor ingresa tu correo electrónico');
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      await apiClient.post('/auth/forgot-password', { email: forgotEmail });
+      setForgotSent(true);
+      toast.success('Se ha enviado un enlace de recuperación a tu correo');
+      setTimeout(() => {
+        setShowForgotModal(false);
+        setForgotEmail('');
+        setForgotSent(false);
+      }, 2000);
+    } catch (err: any) {
+      toast.error(err.message || 'Error al enviar el correo de recuperación');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const closeForgotModal = () => {
+    setShowForgotModal(false);
+    setForgotEmail('');
+    setForgotSent(false);
   };
 
   return (
@@ -109,8 +143,88 @@ const Login: React.FC = () => {
                 {error}
               </div>
             )}
+
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(true)}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium transition"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
           </form>
         </div>
+
+        {/* Modal de Recuperación de Contraseña */}
+        {showForgotModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+              <div className="flex items-center justify-between p-6 border-b border-slate-200">
+                <h2 className="text-xl font-bold text-slate-900">Recuperar Contraseña</h2>
+                <button
+                  onClick={closeForgotModal}
+                  className="text-slate-500 hover:text-slate-700"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="p-6">
+                {!forgotSent ? (
+                  <form onSubmit={handleForgotPassword} className="space-y-4">
+                    <p className="text-sm text-slate-600 mb-4">
+                      Ingresa tu correo electrónico y te enviaremos un enlace para recuperar tu contraseña.
+                    </p>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Correo Electrónico
+                      </label>
+                      <input
+                        type="email"
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        placeholder="ejemplo@correo.com"
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                        required
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={forgotLoading}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                    >
+                      {forgotLoading ? 'Enviando...' : 'Enviar Enlace de Recuperación'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={closeForgotModal}
+                      className="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2 rounded-lg transition"
+                    >
+                      Cancelar
+                    </button>
+                  </form>
+                ) : (
+                  <div className="text-center space-y-4">
+                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                      <span className="text-2xl">✓</span>
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-900">¡Correo Enviado!</h3>
+                    <p className="text-sm text-slate-600">
+                      Hemos enviado un enlace de recuperación a <strong>{forgotEmail}</strong>
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Por favor verifica tu bandeja de entrada. El enlace expirará en 15 minutos.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

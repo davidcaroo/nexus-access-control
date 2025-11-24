@@ -23,6 +23,7 @@ import Settings from './src/pages/Settings';
 import PublicLeaveRequest from './src/pages/PublicLeaveRequest';
 import LeaveRequestsManagement from './src/pages/LeaveRequestsManagement';
 import RolePermissionManagement from './src/pages/RolePermissionManagement'; // Importar la nueva página
+import ResetPassword from './src/pages/ResetPassword'; // Importar página de restauración de contraseña
 
 // Context for global state
 export const AppContext = React.createContext<{
@@ -450,6 +451,7 @@ const AppRoutes = () => {
     <Routes>
       <Route path="/" element={<AccessTerminal />} />
       <Route path="/login" element={!authState.isAuthenticated ? <Login /> : <Navigate to="/admin/dashboard" />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/request-leave" element={<PublicLeaveRequest />} />
       <Route path="/admin" element={authState.isAuthenticated ? <SidebarProvider><PermissionsProvider><Layout /></PermissionsProvider></SidebarProvider> : <Navigate to="/login" />}>
         <Route path="dashboard" element={<Dashboard />} />
