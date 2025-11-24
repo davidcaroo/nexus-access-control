@@ -37,7 +37,7 @@ CREATE TABLE
         email VARCHAR(255) NOT NULL UNIQUE,
         password_hash VARCHAR(255) NOT NULL,
         full_name VARCHAR(255),
-        avatar_url VARCHAR(512),
+        avatar_url LONGTEXT,
         role_id VARCHAR(36),
         is_banned BOOLEAN DEFAULT FALSE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

@@ -1,488 +1,388 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# NEXUS Access Control
 
-# NEXUS Access Control - Sistema Integral de Control de Personal
+**Sistema Integral de Gestión de Personal, Control de Asistencia y Horarios**
 
-**NEXUS Access Control** es una solución empresarial completa para la gestión integral de personal, control de asistencia y cumplimiento de horarios. Combina tecnologías modernas como escaneo QR, IA (Google Gemini), autenticación segura y análisis de datos en tiempo real.
+Solución empresarial completa que combina escaneo QR, autenticación JWT segura y análisis en tiempo real. Diseñado con arquitectura moderna: frontend React con TypeScript y backend Node.js/Express con MySQL para control eficiente de personal.
 
-## 📋 Descripción General
+## 🎯 Características Principales
 
-NEXUS es un sistema diseñado para empresas que necesitan:
-- **Control de Asistencia**: Registrar entrada/salida mediante QR o manualmente
-- **Gestión de Empleados**: Administrar información, cargos y departamentos
-- **Control de Permisos**: Sistema de permisos y solicitudes de ausencia (vacaciones, incapacidades, días libres)
-- **Gestión de Usuarios**: Crear, editar y administrar usuarios del sistema
-- **Control de Roles y Permisos**: Sistema granular de permisos basado en roles
-- **Reportes**: Análisis de horas extra, asistencia y productividad
-- **IA Integrada**: Análisis automático de documentos de identidad con Google Gemini
+### Gestión de Asistencia
+- Escaneo QR para registro automático de entrada/salida
+- Registro manual de asistencia
+- Detección automática de tardanzas comparando con horarios
+- Dashboard en tiempo real con estadísticas de asistencia
+- Histórico completo de registros
 
-## 🏗️ Arquitectura del Proyecto
+### Gestión de Empleados
+- CRUD completo con búsqueda y filtrado avanzado
+- Foto de perfil con preview inmediato
+- Campos: cédula, nombre, cargo, departamento, horarios
+- Generación automática de códigos QR por empleado
+- Estados: activo/inactivo
 
-### Stack Tecnológico
+### Gestión de Permisos y Ausencias
+- Solicitudes de ausencia: vacaciones, licencia médica, días libres
+- Flujo de aprobación: pendiente → aprobado/rechazado
+- Formulario público para empleados (sin autenticación requerida)
+- Validación de rangos de fechas
+- Motivos de rechazo documentados
 
-**Frontend:**
-- **React 18.2** - Framework UI
-- **TypeScript** - Tipado estático
-- **Tailwind CSS** - Estilos
-- **React Router v7** - Enrutamiento
-- **Vite** - Build tool
+### Control de Usuarios y Roles
+- Gestión de usuarios del sistema con roles granulares
+- Roles: superadmin, admin, hr_manager, department_head, employee
+- Sistema de permisos basado en acciones específicas
+- Bloqueo/desbloqueo de usuarios
+- Solo superadmins pueden acceder
 
-**Backend & Base de Datos:**
-- **Supabase** - PostgreSQL + Autenticación + Edge Functions
-- **Supabase Auth UI** - Interfaz de autenticación
+### Reportes y Análisis
+- Dashboard con estadísticas en tiempo real
+- Reporte de horas extra detallado con filtrado por fechas
+- Gráficos interactivos de asistencia y productividad
+- Total de personal, presentes, ausentes, tardanzas
 
-**Integraciones & Librerías:**
-- **Google Gemini AI** (@google/genai) - Análisis de documentos de identidad
-- **html5-qrcode** - Escaneo QR en navegador
-- **Recharts** - Visualización de datos
-- **React Hot Toast** - Notificaciones
-- **Lucide React** - Iconografía
-- **html5-qrcode** - Generación y lectura de códigos QR
+## 🏗️ Arquitectura Técnica
+
+### Frontend
+- **React 18.2** con TypeScript para tipado estático
+- **Vite** como build tool (desarrollo rápido, bundling optimizado)
+- **Tailwind CSS** para estilos responsivos
+- **React Router v7** para enrutamiento SPA
+- **Recharts** para visualización de datos
+- **React Hot Toast** para notificaciones en tiempo real
+
+### Backend
+- **Node.js/Express.js** con TypeScript support
+- **MySQL 8.0** con pool de conexiones (20 conexiones concurrentes)
+- **JWT (jsonwebtoken)** para autenticación sin estado
+- **Socket.io** para comunicación en tiempo real
+- **Multer** para manejo de uploads
+- **CORS** configurado para frontend
+
+### Integraciones
+- **Google Gemini AI** para análisis automático de documentos de identidad
+- **html5-qrcode** para escaneo QR en navegador
+- **Lucide React** para iconografía consistente
 
 ## 📁 Estructura del Proyecto
 
 ```
 nexus-access-control/
-├── pages/                           # Páginas principales (admin)
-│   ├── Login.tsx                    # Autenticación con Supabase Auth UI
-│   ├── Dashboard.tsx                # Panel de control con estadísticas
-│   ├── AccessTerminal.tsx           # Terminal de acceso (escaneo QR/manual)
-│   ├── EmployeeManager.tsx          # Gestión de empleados
-│   ├── Reports.tsx                  # Reportes generales
-│   └── OvertimeReport.tsx           # Reporte de horas extra
+├── backend/                    # Backend Express.js
+│   ├── config/
+│   │   └── db.js              # Pool MySQL con 20 conexiones
+│   ├── middleware/
+│   │   └── auth.js            # Verificación JWT
+│   ├── routes/
+│   │   ├── auth.js            # Autenticación y perfil
+│   │   ├── employees.js       # CRUD empleados
+│   │   ├── attendance.js      # Registros de asistencia
+│   │   ├── leaveRequests.js   # Solicitudes de ausencia
+│   │   ├── users.js           # Gestión de usuarios
+│   │   ├── roles.js           # Roles y permisos
+│   │   └── settings.js        # Configuración
+│   ├── migrations.js          # Migraciones automáticas (silent mode)
+│   └── server.js              # Entrada principal con WebSocket
+├── pages/                      # Páginas principales (admin)
+│   ├── Dashboard.tsx          # Panel de control
+│   ├── AccessTerminal.tsx     # Terminal de escaneo QR
+│   ├── EmployeeManager.tsx    # Gestión de empleados
+│   ├── Reports.tsx            # Reportes generales
+│   ├── OvertimeReport.tsx     # Reporte de horas extra
+│   └── Login.tsx              # Autenticación
 ├── src/
-│   ├── pages/                       # Páginas avanzadas
-│   │   ├── UserManagement.tsx       # Gestión de usuarios del sistema
-│   │   ├── RolePermissionManagement.tsx # Gestión de roles y permisos
-│   │   ├── LeaveRequestsManagement.tsx  # Administración de solicitudes de ausencia
-│   │   ├── Settings.tsx             # Configuración del sistema
-│   │   └── PublicLeaveRequest.tsx   # Formulario público para solicitar permisos
-│   ├── components/                  # Componentes reutilizables
-│   │   ├── QRScanner.tsx            # Lector QR con acceso a cámara
-│   │   ├── ProtectedRoute.tsx       # Rutas protegidas por autenticación
-│   │   ├── ConfirmationModal.tsx    # Modal de confirmación genérica
-│   │   ├── OvertimeDetailModal.tsx  # Detalles de horas extra
-│   │   └── ToastProvider.tsx        # Proveedor de notificaciones
-│   ├── context/                     # Context API
-│   │   ├── PermissionsContext.tsx   # Control de permisos
-│   │   └── SidebarContext.tsx       # Estado del sidebar
-│   └── integrations/
-│       └── supabase/
-│           └── client.ts             # Cliente Supabase
-├── components/                      # Componentes generales
-│   ├── Layout.tsx                   # Layout principal
-│   ├── Sidebar.tsx                  # Navegación lateral
-│   ├── UIComponents.tsx             # Componentes UI reutilizables
-│   └── ManualAttendanceModal.tsx    # Modal para registro manual
-├── services/
-│   └── geminiService.ts             # Servicio de análisis de IA (Gemini)
-├── supabase/functions/              # Edge Functions (backend serverless)
-│   ├── manage-attendance/           # Funciones de asistencia
-│   ├── manage-users/                # Funciones de usuarios
-│   └── manage-roles-permissions/    # Funciones de roles y permisos
-├── App.tsx                          # Componente raíz con contexto global
-├── types.ts                         # Definiciones de tipos TypeScript
-├── vite.config.ts                   # Configuración de Vite
-└── package.json                     # Dependencias del proyecto
+│   ├── pages/
+│   │   ├── UserManagement.tsx           # Gestión de usuarios
+│   │   ├── RolePermissionManagement.tsx # Roles y permisos
+│   │   ├── LeaveRequestsManagement.tsx  # Admin de ausencias
+│   │   ├── Settings.tsx                 # Configuración
+│   │   └── PublicLeaveRequest.tsx       # Formulario público
+│   ├── components/
+│   │   ├── QRScanner.tsx      # Lector QR con cámara
+│   │   ├── ProtectedRoute.tsx # Rutas protegidas
+│   │   ├── ToastProvider.tsx  # Notificaciones globales
+│   │   └── ConfirmationModal.tsx
+│   ├── context/
+│   │   ├── PermissionsContext.tsx # Control de permisos
+│   │   └── SidebarContext.tsx     # Estado sidebar
+│   ├── hooks/
+│   │   └── useSocket.ts       # Hook para WebSocket
+│   └── services/
+│       ├── apiClient.ts       # Cliente HTTP centralizado
+│       └── geminiService.ts   # Integración Gemini AI
+├── components/                 # Componentes globales
+├── App.tsx                     # Componente raíz
+├── types.ts                    # Definiciones TypeScript
+└── package.json
 ```
 
-## 🎯 Características Principales
+## 🔐 Sistema de Seguridad
 
-### 1. **Autenticación y Autorización**
-- Autenticación basada en email/contraseña con Supabase Auth
-- Sistema de roles: `superadmin`, `admin`, `hr_manager`, `department_head`, `employee`
-- Control granular de permisos mediante acciones específicas
-- Rutas protegidas con verificación de autenticación
-- Sesión persistente
+- **Autenticación JWT**: Tokens sin estado, seguros y escalables
+- **Autorización basada en roles**: Verificación de permisos granulares
+- **Hash de contraseñas**: bcryptjs para almacenamiento seguro
+- **Rutas protegidas**: ProtectedRoute component con verificación de roles
+- **CORS configurado**: Solo frontend autorizado
+- **Middleware de autenticación**: Validación en todas las rutas
 
-### 2. **Control de Asistencia**
-- **Escaneo QR**: Registra automáticamente entrada/salida
-- **Registro Manual**: Permite ingreso manual de asistencia
-- **Terminal de Acceso**: Interfaz dedicada para registros en tiempo real
-- **Detección de Tardanza**: Identifica automáticamente si la entrada es tardía
-- Registro de método usado: QR, manual o facial
+## 🚀 Instalación y Configuración
 
-### 3. **Gestión de Empleados**
-- CRUD completo de empleados
-- Campos: cédula, nombre, cargo, departamento, horarios, estado
-- **Integración con Gemini AI**: Análisis automático de cédulas/documentos
-- Generación automática de códigos QR por empleado
-- Foto de perfil por empleado
-- Búsqueda y filtrado
+### Requisitos Previos
+- Node.js 18+ y npm/pnpm
+- MySQL 8.0+
+- API Key de Google Gemini (opcional, para análisis de documentos)
 
-### 4. **Solicitudes de Ausencia**
-- Tipos de solicitudes: Vacaciones, Baja por Enfermedad, Día Libre
-- Flujo: Solicitud → Pendiente → Aprobación/Rechazo
-- Rango de fechas seleccionable
-- Sistema de motivos y razones de rechazo
-- Acceso público para empleados (sin autenticación requerida)
+### Setup Frontend
 
-### 5. **Gestión de Usuarios del Sistema**
-- Creación, edición y eliminación de usuarios
-- Asignación de roles
-- Bloqueo/desbloqueo de usuarios
-- Vista de fecha de creación
-- Solo superadmins pueden acceder
+```bash
+# Instalar dependencias
+pnpm install
 
-### 6. **Gestión de Roles y Permisos**
-- Crear roles personalizados
-- Asignar permisos específicos a roles
-- Permisos basados en acciones (ej: `employees:create`, `employees:edit`)
-- CRUD de roles y permisos
-- Relaciones M:N (muchos-a-muchos) entre roles y permisos
+# Configurar variables de entorno (.env.local)
+VITE_API_BASE_URL=http://localhost:3001
+VITE_GEMINI_API_KEY=your-gemini-api-key
 
-### 7. **Reportes y Análisis**
-- **Dashboard**: Estadísticas en tiempo real
-  - Total de personal
-  - Presentes hoy
-  - Ausentes
-  - Tardanzas
-  - Gráficos de estado actual
-- **Reporte de Horas Extra**: Análisis de sobretiempo por empleado
-  - Detalle diario de horas extra
-  - Filtrado por rango de fechas
-  - Modal con detalles completos
+# Desarrollo
+pnpm run dev
+# http://localhost:3000
 
-### 8. **Integración con Google Gemini AI**
-- Análisis automático de documentos de identidad
-- Extracción de nombre, cédula y descripción
-- Asistencia en creación de empleados
-
-## 🔄 Flujos de Negocio
-
-### Registro de Asistencia
-```
-Empleado escanea QR o entrada manual
-  ↓
-Sistema registra entrada/salida
-  ↓
-Detecta si es tardanza comparando con horario
-  ↓
-Guarda en attendance_records
-  ↓
-Dashboard actualiza en tiempo real
+# Build producción
+pnpm run build
 ```
 
-### Solicitud de Ausencia
-```
-Empleado crea solicitud (pública)
-  ↓
-Estado: Pendiente
-  ↓
-HR/Manager revisa y aprueba/rechaza
-  ↓
-Se registra la decisión con fecha y motivo
-  ↓
-Empleado notificado
+### Setup Backend
+
+```bash
+# Instalar dependencias
+cd backend
+npm install
+
+# Configurar variables (.env)
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=password
+DB_NAME=nexus_db
+JWT_SECRET=your-secret-key
+FRONTEND_URL=http://localhost:3000
+NODE_ENV=development
+PORT=3001
+
+# Iniciar servidor
+npm start
+# http://localhost:3001
 ```
 
-### Gestión de Permisos
-```
-SuperAdmin crea roles con permisos específicos
-  ↓
-Admin asigna roles a usuarios
-  ↓
-Sistema verifica permisos en PermissionsContext
-  ↓
-UI muestra/oculta botones según permisos
+### Inicializar Base de Datos
+
+```bash
+# 1. Crear database
+mysql -u root -p < db-init.sql
+
+# 2. El backend ejecuta migraciones automáticamente al iniciar
+# - Migración 1: Altera avatar_url a LONGTEXT para imágenes base64
+# - Migración 2: Configura max_allowed_packet a 256MB
 ```
 
-## 🗄️ Modelos de Datos Principales
+## 📊 Modelos de Datos Principales
 
-### User (Autenticación)
+### User (Autenticación JWT)
 ```typescript
-- id: string (UUID)
-- email: string
-- full_name: string
-- role: string (role name)
-- avatar_url?: string
+id: string (UUID)
+email: string (único)
+full_name: string
+role: RoleName
+avatar_url?: string (LONGTEXT base64)
 ```
 
 ### Employee
 ```typescript
-- id: string (UUID)
-- cedula: string (Cédula única)
-- nombre: string
-- foto: string
-- cargo: string
-- departamento: string
-- horario_entrada: string (HH:mm)
-- horario_salida: string (HH:mm)
-- estado: 'activo' | 'inactivo'
-- fecha_ingreso: string (ISO Date)
-- qr_code_url?: string
+id: string (UUID)
+cedula: string (único)
+nombre: string
+foto: string (base64)
+cargo: string
+departamento: string
+horario_entrada: string (HH:mm)
+horario_salida: string (HH:mm)
+estado: 'activo' | 'inactivo'
+fecha_ingreso: string (ISO Date)
 ```
 
 ### AttendanceRecord
 ```typescript
-- id: number
-- employee_id: string (FK)
-- tipo: 'entrada' | 'salida'
-- fecha: string (YYYY-MM-DD)
-- hora: string (HH:mm:ss)
-- metodo: 'qr' | 'manual' | 'facial'
-- tardanza: boolean
+id: number (autoincrement)
+employee_id: string (FK)
+tipo: 'entrada' | 'salida'
+fecha: string (YYYY-MM-DD)
+hora: string (HH:mm:ss)
+metodo: 'qr' | 'manual'
+tardanza: boolean
 ```
 
 ### LeaveRequest
 ```typescript
-- id: string (UUID)
-- employee_id: string (FK)
-- request_type: 'vacation' | 'sick_leave' | 'day_off'
-- start_date: string (YYYY-MM-DD)
-- end_date: string (YYYY-MM-DD)
-- reason?: string
-- status: 'pending' | 'approved' | 'rejected'
-- requested_at: string (ISO Timestamp)
-- approved_by?: string (FK User)
-- approved_at?: string (ISO Timestamp)
-- rejection_reason?: string
+id: string (UUID)
+employee_id: string (FK)
+request_type: 'vacation' | 'sick_leave' | 'day_off'
+start_date: string (YYYY-MM-DD)
+end_date: string (YYYY-MM-DD)
+status: 'pending' | 'approved' | 'rejected'
+requested_at: string (ISO Timestamp)
+approved_by?: string (FK User)
+rejection_reason?: string
 ```
 
-### Role & Permission
-```typescript
-Role:
-- id: string (UUID)
-- name: RoleName ('superadmin' | 'admin' | 'hr_manager' | ...)
-- description: string
-- created_at: string (ISO Timestamp)
-- permissions: string[] (Array de acciones)
+## 🔗 Rutas API Principales
 
-Permission:
-- id: string (UUID)
-- action: string (ej: 'employees:create')
-- description: string
-- created_at: string (ISO Timestamp)
+### Autenticación
+- `POST /api/auth/login` - Login con email/contraseña
+- `POST /api/auth/register` - Registro de usuario
+- `GET /api/auth/me` - Obtener usuario autenticado
+- `PATCH /api/auth/me/profile` - Actualizar perfil + avatar
+
+### Empleados
+- `GET /api/employees` - Listar todos
+- `POST /api/employees` - Crear nuevo
+- `PATCH /api/employees/:id` - Actualizar
+- `DELETE /api/employees/:id` - Eliminar
+
+### Asistencia
+- `GET /api/attendance` - Registros con filtros
+- `POST /api/attendance/checkin` - Registrar entrada/salida
+- `POST /api/attendance/manual` - Registro manual
+
+### Solicitudes de Ausencia
+- `GET /api/leave-requests` - Listar solicitudes
+- `POST /api/leave-requests` - Crear solicitud (pública)
+- `PATCH /api/leave-requests/:id/approve` - Aprobar
+- `PATCH /api/leave-requests/:id/reject` - Rechazar
+
+### Usuarios y Roles
+- `GET /api/users` - Listar usuarios (superadmin)
+- `POST /api/users` - Crear usuario
+- `PATCH /api/users/:id` - Actualizar (bloqueo/desbloqueo)
+- `GET /api/roles` - Listar roles disponibles
+- `POST /api/roles` - Crear rol personalizado
+
+## 🧪 Tipos y Interfaces TypeScript
+
+Todas las entidades están tipadas en `types.ts`:
+- `User` - Usuario autenticado
+- `Employee` - Información de empleado
+- `AttendanceRecord` - Registro de asistencia
+- `LeaveRequest` - Solicitud de ausencia
+- `Role` - Definición de rol
+- `Permission` - Definición de permiso
+- `RoleName` - Tipo unión de roles válidos
+
+## 📡 Comunicación en Tiempo Real
+
+Socket.io para actualizaciones en vivo:
+- Nuevos registros de asistencia
+- Cambios en solicitudes de ausencia
+- Notificaciones de usuarios conectados
+
+## 🎯 Flujos de Negocio Clave
+
+### Registro de Asistencia
+```
+Escaneo QR/Entrada Manual → Registro en BD → Detección de tardanza
+→ WebSocket notifica → Dashboard actualiza en tiempo real
 ```
 
-## 🚀 Funciones Edge (Backend Serverless)
-
-### `/manage-attendance`
-- **DELETE**: Elimina todos los registros de asistencia (solo superadmin)
-
-### `/manage-users`
-- **GET**: Obtiene lista de usuarios (solo superadmin)
-- **POST**: Crea nuevo usuario
-- **PATCH**: Actualiza usuario (bloqueo/desbloqueo)
-- **DELETE**: Elimina usuario
-
-### `/manage-roles-permissions`
-- **GET /roles**: Obtiene roles disponibles
-- **POST /roles**: Crea nuevo rol
-- **PATCH /roles**: Actualiza rol
-- **DELETE /roles**: Elimina rol
-- **GET /permissions**: Obtiene permisos disponibles
-- **POST /permissions**: Crea nuevo permiso
-- **DELETE /permissions**: Elimina permiso
-
-## 🔐 Sistema de Seguridad
-
-- **Autenticación**: Supabase Auth (JWT)
-- **Autorización**: Verificación de roles y permisos en Edge Functions
-- **RLS (Row Level Security)**: Políticas en Supabase
-- **Protección de rutas**: ProtectedRoute component
-- **Validación de tokens**: En todas las Edge Functions
-
-## ⚙️ Instalación y Configuración
-
-### Requisitos Previos
-- Node.js 16+ y npm/pnpm
-- Cuenta de Supabase
-- API Key de Google Gemini
-- Base de datos PostgreSQL (a través de Supabase)
-
-### Pasos de Instalación
-
-1. **Clonar el repositorio:**
-   ```bash
-   git clone <repo-url>
-   cd nexus-access-control
-   ```
-
-2. **Instalar dependencias:**
-   ```bash
-   pnpm install
-   # o
-   npm install
-   ```
-
-3. **Configurar variables de entorno:**
-   Crear archivo `.env.local` en la raíz del proyecto:
-   ```
-   VITE_SUPABASE_URL=https://your-project.supabase.co
-   VITE_SUPABASE_ANON_KEY=your-anon-key
-   GEMINI_API_KEY=your-gemini-api-key
-   ```
-
-4. **Ejecutar en desarrollo:**
-   ```bash
-   pnpm run dev
-   # o
-   npm run dev
-   ```
-   La aplicación estará disponible en `http://localhost:3000`
-
-5. **Construir para producción:**
-   ```bash
-   pnpm run build
-   # o
-   npm run build
-   ```
-
-6. **Preview de producción:**
-   ```bash
-   pnpm run preview
-   # o
-   npm run preview
-   ```
-
-## 🌐 Rutas Principales
-
-### Rutas Públicas
-- `/login` - Página de autenticación
-- `/leave-request` - Formulario de solicitud de ausencia (público)
-
-### Rutas Protegidas (Requieren Autenticación)
-- `/admin/dashboard` - Panel de control principal
-- `/admin/access-terminal` - Terminal de acceso/escaneo
-- `/admin/employees` - Gestión de empleados
-- `/admin/reports` - Reportes generales
-- `/admin/overtime` - Reporte de horas extra
-- `/admin/users` - Gestión de usuarios (superadmin)
-- `/admin/roles` - Gestión de roles y permisos (superadmin)
-- `/admin/leave-requests` - Gestión de solicitudes (admin/hr)
-- `/admin/settings` - Configuración del sistema (admin)
-
-## 🎨 Interfaz de Usuario
-
-- **Responsive Design**: Funciona en desktop, tablet y móvil
-- **Temas**: Interfaz profesional con Tailwind CSS
-- **Iconografía**: Lucide React para iconos consistentes
-- **Notificaciones**: React Hot Toast para feedback del usuario
-- **Gráficos**: Recharts para visualización de datos
-- **Modales**: Componentes reutilizables para confirmaciones y detalles
-
-## 📊 Estadísticas y Métricas
-
-El Dashboard proporciona en tiempo real:
-- Total de personal registrado
-- Presentes hoy con porcentaje de asistencia
-- Cantidad de ausentes
-- Número de tardanzas
-- Gráfico de estado actual (En Sitio vs Salieron)
-- Información de presencia por hora
-
-## 🔄 Contextos Globales
-
-### AppContext
-Gestiona:
-- Estado de autenticación
-- Lista de empleados
-- Registros de asistencia
-- Solicitudes de ausencia
-- Usuarios del sistema
-- Funciones de CRUD para todos los recursos
-- Estados de carga
-
-### PermissionsContext
-Gestiona:
-- Permisos del usuario actual
-- Función `can(action)` para validar acciones
-- Carga de permisos desde la base de datos
-
-### SidebarContext
-Gestiona:
-- Estado colapsado/expandido del sidebar
-- Responsividad en móvil
-
-## 🧪 Variables de Entorno
-
-```env
-# Supabase
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-public-anon-key
-
-# Google Gemini AI
-GEMINI_API_KEY=your-gemini-api-key
-
-# Vite
-VITE_APP_NAME=NEXUS Access Control
+### Solicitud de Ausencia
+```
+Empleado crea solicitud (pública) → Estado: Pendiente
+→ HR/Manager aprueba/rechaza → Empleado notificado
 ```
 
-## 📦 Dependencias Principales
-
-```json
-{
-  "@google/genai": "^1.30.0",
-  "@supabase/auth-ui-react": "^0.4.7",
-  "@supabase/supabase-js": "^2.84.0",
-  "@yudiel/react-qr-scanner": "^2.0.4",
-  "html5-qrcode": "^2.3.8",
-  "lucide-react": "^0.554.0",
-  "react": "^18.2.0",
-  "react-dom": "^18.2.0",
-  "react-hot-toast": "^2.6.0",
-  "react-router-dom": "^7.9.6",
-  "recharts": "^3.4.1"
-}
+### Gestión de Permisos
+```
+SuperAdmin crea roles/permisos → Admin asigna a usuarios
+→ Sistema verifica en PermissionsContext → UI muestra/oculta funciones
 ```
 
-## 🚀 Estado del Proyecto
+## ✅ Estado del Proyecto
 
-### ✅ Implementado
-- ✅ Autenticación con Supabase Auth
-- ✅ Control de asistencia QR/Manual
+- ✅ Autenticación con JWT
+- ✅ Control de asistencia QR/manual
 - ✅ Gestión completa de empleados
+- ✅ Solicitudes de ausencia con flujo de aprobación
 - ✅ Sistema de roles y permisos granular
 - ✅ Gestión de usuarios del sistema
-- ✅ Solicitudes de ausencia con flujo de aprobación
 - ✅ Reportes de horas extra
-- ✅ Dashboard con estadísticas en tiempo real
-- ✅ Integración con Google Gemini AI
-- ✅ Edge Functions de Supabase
-- ✅ Contextos globales de estado
-- ✅ Rutas protegidas
-- ✅ UI responsiva
+- ✅ Dashboard en tiempo real
+- ✅ Socket.io para actualizaciones en vivo
+- ✅ Avatar upload con soporte base64 (LONGTEXT)
+- ✅ Integraciones con Google Gemini AI
+- ✅ Migraciones automáticas (silent mode)
+- ✅ Pool de conexiones MySQL (20 conexiones)
 
-### 🔄 En Desarrollo/Mejoras Futuras
-- 📋 Reporte de asistencia mensual detallado
+## 🚀 Mejoras Futuras
+
 - 📱 Aplicación móvil nativa
-- 🎯 Predicción de asistencia con ML
+- 🎯 Reconocimiento facial para acceso
 - 🔔 Notificaciones por email/SMS
 - 📈 Dashboards avanzados con BI
-- 🌍 Múltiples idiomas (i18n)
-- 🖼️ Reconocimiento facial para acceso
+- 🌍 Soporte multi-idioma (i18n)
+- 📊 Análisis predictivo de asistencia
 
-## 📝 Notas Importantes
+## 📝 Variables de Entorno
 
-- El sistema usa **Supabase** como backend único (autenticación + base de datos + funciones serverless)
-- Los **Edge Functions** se despliegan en Supabase y manejan toda la lógica crítica del backend
-- La **IA de Gemini** se integra para análisis automático de documentos
-- El proyecto está tipado completamente con **TypeScript**
-- Se utiliza **Tailwind CSS** para un diseño consistente y moderno
+### Frontend (.env.local)
+```
+VITE_API_BASE_URL=http://localhost:3001
+VITE_GEMINI_API_KEY=your-api-key
+```
+
+### Backend (.env)
+```
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=password
+DB_NAME=nexus_db
+JWT_SECRET=your-secret-key
+FRONTEND_URL=http://localhost:3000
+NODE_ENV=development
+PORT=3001
+```
+
+## 📦 Dependencias Clave
+
+**Frontend:**
+- react@18.2.0, react-dom@18.2.0
+- typescript@~5.8.2
+- tailwindcss (v3), react-router-dom@7.9.6
+- recharts@3.4.1, react-hot-toast@2.6.0
+- @google/genai@1.30.0, html5-qrcode@2.3.8
+- lucide-react@0.554.0
+
+**Backend:**
+- express@4.18.2, cors@2.8.5
+- mysql2@3.6.5, jsonwebtoken@9.0.2
+- bcryptjs@2.4.3, socket.io@4.8.1
+- multer@1.4.5, express-validator@7.0.0
 
 ## 🤝 Contribuciones
 
 Las contribuciones son bienvenidas. Por favor:
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
+1. Fork el repositorio
+2. Crea una rama (`git checkout -b feature/NuevaFeature`)
+3. Commit cambios (`git commit -m 'Add NuevaFeature'`)
+4. Push (`git push origin feature/NuevaFeature`)
 5. Abre un Pull Request
 
 ## 📄 Licencia
 
-Este proyecto está bajo licencia MIT. Ver el archivo `LICENSE` para más detalles.
+MIT License - ver LICENSE para detalles
 
-## 🔗 Enlaces Útiles
+## 🔗 Recursos
 
-- [Documentación de Supabase](https://supabase.com/docs)
-- [Documentación de React](https://react.dev)
-- [Documentación de Vite](https://vitejs.dev)
-- [Google Gemini API](https://ai.google.dev)
+- [React Docs](https://react.dev)
+- [Express.js](https://expressjs.com)
+- [MySQL Documentation](https://dev.mysql.com/doc)
 - [Tailwind CSS](https://tailwindcss.com)
+- [Vite](https://vitejs.dev)
 
 ---
 
-**Desarrollado con ❤️ usando React, TypeScript y Supabase**
+**Desarrollado con ❤️ usando React, TypeScript, Express.js y MySQL**

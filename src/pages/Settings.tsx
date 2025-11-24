@@ -6,10 +6,11 @@ import { Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const Settings: React.FC = () => {
-  const { authState, refreshUser } = useContext(AppContext)!;
+  const { authState, setAuthState } = useContext(AppContext)!;
   const user = authState.user;
 
   const [fullName, setFullName] = useState(user?.full_name || '');
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatar_url || null);
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
   const avatarFileRef = useRef<HTMLInputElement>(null);
@@ -61,13 +62,35 @@ const Settings: React.FC = () => {
     setIsProfileSaving(true);
 
     try {
-      const response = await apiClient.patch(`/users/${user.id}`, { full_name: fullName });
+      const updateData: any = { full_name: fullName };
+
+      // Si hay un avatar guardado en estado local, incluirlo
+      if (avatarPreview && avatarPreview.startsWith('data:image')) {
+        updateData.avatar_url = avatarPreview;
+      }
+
+      const response = await apiClient.patch('/auth/me/profile', updateData);
+
       if (response) {
-        toast.success('Nombre actualizado correctamente.');
-        await refreshUser();
+        // Actualizar el estado local sin cerrar sesión
+        setAuthState({
+          isAuthenticated: true,
+          user: {
+            ...user,
+            full_name: fullName,
+            avatar_url: avatarPreview || user.avatar_url,
+          },
+        });
+
+        // Limpiar el preview del avatar después de guardar
+        if (avatarPreview && avatarPreview.startsWith('data:image')) {
+          setAvatarPreview(null);
+        }
+
+        toast.success('Cambios guardados correctamente.');
       }
     } catch (error) {
-      toast.error('Error al actualizar el perfil.');
+      toast.error('Error al guardar los cambios.');
       console.error('Profile update error:', error);
     } finally {
       setIsProfileSaving(false);
@@ -76,25 +99,22 @@ const Settings: React.FC = () => {
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file) return;
 
     setIsAvatarUploading(true);
 
+    // Leer archivo como base64
     const reader = new FileReader();
-    reader.onloadend = async () => {
+    reader.onloadend = () => {
       const base64 = reader.result as string;
 
       try {
-        // Guardar avatar base64 en la BD directamente
-        const response = await apiClient.patch('/auth/me/avatar', { avatar_url: base64 });
-
-        if (response) {
-          toast.success('Foto de perfil actualizada.');
-          await refreshUser();
-        }
-      } catch (error) {
-        toast.error('Error al guardar la nueva foto.');
-        console.error('Avatar upload error:', error);
+        // Guardar base64 en estado local para preview (igual que EmployeeManager)
+        setAvatarPreview(base64);
+        toast.success('Foto cargada. Haz clic en "Guardar Cambios" para confirmar.');
+      } catch (err) {
+        toast.error('Error al cargar la foto.');
+        console.error('Avatar load error:', err);
       } finally {
         setIsAvatarUploading(false);
       }
@@ -112,7 +132,7 @@ const Settings: React.FC = () => {
     try {
       // Nota: Este endpoint aún necesita ser implementado en el backend
       // Por ahora solo mostrar mensaje informativo
-      toast.info('Contacta al administrador para cambiar tu contraseña.');
+      toast.success('Contacta al administrador para cambiar tu contraseña.');
     } catch (error) {
       toast.error('Error al procesar la solicitud.');
     } finally {
@@ -134,7 +154,7 @@ const Settings: React.FC = () => {
           <Card className="text-center">
             <div className="relative w-32 h-32 mx-auto mb-4">
               <img
-                src={user.avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(user.full_name)}`}
+                src={avatarPreview || user.avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(user.full_name)}`}
                 alt="Avatar"
                 className="w-32 h-32 rounded-full object-cover"
               />

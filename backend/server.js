@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import pool from './config/db.js';
+import runMigrations from './migrations.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -84,9 +85,16 @@ const PORT = process.env.PORT || 3001;
 
 // Test database connection before starting
 pool.getConnection()
-    .then(connection => {
+    .then(async connection => {
         connection.release();
         console.log('✅ Database connection successful');
+
+        // Ejecutar migraciones
+        try {
+            await runMigrations();
+        } catch (error) {
+            console.error('⚠️ Error en migraciones (continuando):', error.message);
+        }
 
         httpServer.listen(PORT, () => {
             console.log(`✅ Backend running on http://localhost:${PORT}`);

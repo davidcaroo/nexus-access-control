@@ -176,16 +176,38 @@ class APIClient {
     return response.json();
   }
 
-  async patch(endpoint: string, data: any) {
-    const response = await this.fetchWithAuth(endpoint, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || errorData.error || 'Request failed');
+  async patch(endpoint: string, data: any, retries = 3) {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const response = await this.fetchWithAuth(endpoint, {
+          method: 'PATCH',
+          body: JSON.stringify(data),
+        });
+        
+        if (!response.ok) {
+          // Si es error 503 (servicio no disponible), reintentar
+          if (response.status === 503 && attempt < retries) {
+            await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // Esperar progresivamente
+            continue;
+          }
+          
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || errorData.error || 'Request failed');
+        }
+        return response.json();
+      } catch (error) {
+        lastError = error as Error;
+        if (attempt < retries && (error as Error).message.includes('connection')) {
+          await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+          continue;
+        }
+        throw error;
+      }
     }
-    return response.json();
+    
+    throw lastError || new Error('Request failed after retries');
   }
 
   async delete(endpoint: string) {

@@ -10,10 +10,9 @@ const pool = mysql.createPool({
     database: process.env.DB_NAME || 'nexus_access_control',
     port: process.env.DB_PORT || 3306,
     waitForConnections: true,
-    connectionLimit: 10,
+    connectionLimit: 20,  // Aumentado de 10 a 20
     queueLimit: 0,
     timezone: '+00:00',
-    enableKeepAlive: true,
     charset: 'utf8mb4'
 });
 
