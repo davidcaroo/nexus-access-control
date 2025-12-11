@@ -17,6 +17,7 @@ import userRoutes from './routes/users.js';
 import roleRoutes from './routes/roles.js';
 import uploadsRoutes from './routes/uploads.js';
 import settingsRoutes from './routes/settings.js';
+import reportsRoutes from './routes/reports.js';
 
 dotenv.config();
 
@@ -52,6 +53,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/uploads', uploadsRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/reports', reportsRoutes);
 
 // Servir carpeta uploads como estática DESPUÉS de las rutas
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
