@@ -176,10 +176,8 @@ const LeaveRequestsManagement: React.FC = () => {
                       <div className="font-medium">{getEmployeeName(req.employee_id)}</div>
                       <div className="text-xs text-gray-500 font-mono">{getEmployeeCedula(req.employee_id)}</div>
                     </td>
-                    <td className="px-6 py-4 capitalize">{translateRequestType(req.request_type)}</td> {/* Usar la función de traducción */}
-                    <td className="px-6 py-4 text-gray-600">
-                      {formatDateRange(req.start_date, req.end_date)}
-                    </td>
+                    <td className="px-6 py-4 capitalize">{translateRequestType(req.request_type)}</td>
+                    <td className="px-6 py-4 text-gray-600">{formatDateRange(req.start_date, req.end_date)}</td>
                     <td className="px-6 py-4 text-gray-600 max-w-xs truncate">{req.reason || 'N/A'}</td>
                     <td className="px-6 py-4">
                       <Badge color={getStatusBadgeColor(req.status)}>{req.status.toUpperCase()}</Badge>

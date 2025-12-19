@@ -7,11 +7,17 @@ import {
 } from 'recharts';
 import { ManualAttendanceModal } from '../components/ManualAttendanceModal';
 import { usePermissions } from '../src/context/PermissionsContext';
+import { DashboardSkeleton } from '../components/LoadingScreen';
 
 const Dashboard: React.FC = () => {
-  const { employees, records } = useContext(AppContext)!;
+  const { employees, records, isAppDataLoading } = useContext(AppContext)!;
   const { can } = usePermissions();
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+
+  // Mostrar skeleton mientras cargan los datos
+  if (isAppDataLoading) {
+    return <DashboardSkeleton />;
+  }
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];

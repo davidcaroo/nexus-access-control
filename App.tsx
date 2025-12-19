@@ -2,12 +2,11 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, Employee, AttendanceRecord, AuthState, LeaveRequest, ManagedUser, Role, Permission } from './types';
 import { Layout } from './components/Layout';
-import { supabase } from './src/integrations/supabase/client';
 import { ToastProvider } from './src/components/ToastProvider';
 import { apiClient } from './src/services/apiClient';
 import { useSocket } from './src/hooks/useSocket';
 import toast from 'react-hot-toast';
-import { Loader2 } from 'lucide-react';
+import { LoadingScreen } from './components/LoadingScreen';
 import { SidebarProvider } from './src/context/SidebarContext';
 import { PermissionsProvider } from './src/context/PermissionsContext';
 
@@ -127,46 +126,16 @@ const App: React.FC = () => {
   }, [authState.isAuthenticated, authState.user?.role]); // Dependencias para estabilidad
 
   const refreshUser = useCallback(async () => {
-    console.log("Auth Flow (refreshUser): Refreshing user session...");
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError) {
-      console.error("Auth Flow (refreshUser): Error getting session during refresh:", sessionError);
-      setAuthState({ isAuthenticated: false, user: null });
-      return;
-    }
-
-    if (session?.user) {
-      console.log("Auth Flow (refreshUser): Session user found. User ID:", session.user.id);
-      const { data: profile, error: profileError } = await supabase.from('profiles').select('*, roles(name)').eq('id', session.user.id).single();
-
-      if (profileError) {
-        console.error("Auth Flow (refreshUser): Error fetching profile during refresh:", profileError);
-        setAuthState({ isAuthenticated: false, user: null });
-        return;
-      }
-      console.log("Auth Flow (refreshUser): Raw profile data:", profile); // Nuevo log
-      console.log("Auth Flow (refreshUser): Profile roles property:", profile?.roles); // Nuevo log
-
-      const roleName = (profile?.roles as { name: string } | null)?.name;
-      console.log("Auth Flow (refreshUser): Extracted role name:", roleName);
-
-      if (profile && roleName && (roleName === 'admin' || roleName === 'superadmin' || roleName === 'hr_manager' || roleName === 'department_head')) { // Incluir nuevos roles
-        const user: User = {
-          id: session.user.id,
-          email: session.user.email,
-          full_name: profile.full_name,
-          role: roleName,
-          avatar_url: profile.avatar_url,
-        };
-        setAuthState({ isAuthenticated: true, user });
-        console.log("Auth Flow (refreshUser): AuthState updated to authenticated. User:", user.full_name, "Role:", user.role);
-      } else {
-        console.warn("Auth Flow (refreshUser): User role not authorized or profile/role missing. Role:", roleName, "Profile exists:", !!profile);
-        await supabase.auth.signOut();
-        setAuthState({ isAuthenticated: false, user: null });
-      }
-    } else {
-      console.log("Auth Flow (refreshUser): No session user found during refresh.");
+    console.log("Auth Flow (refreshUser): Refreshing user data from backend...");
+    try {
+      const user = await apiClient.getCurrentUser();
+      setAuthState({
+        isAuthenticated: true,
+        user: user as any,
+      });
+      console.log("Auth Flow (refreshUser): User data refreshed successfully", user);
+    } catch (error) {
+      console.error("Auth Flow (refreshUser): Error refreshing user:", error);
       setAuthState({ isAuthenticated: false, user: null });
     }
   }, []);
@@ -176,6 +145,8 @@ const App: React.FC = () => {
     const restoreSession = async () => {
       try {
         const token = localStorage.getItem('accessToken');
+        console.log("Auth Flow (restoreSession): Checking for stored token...", !!token);
+
         if (token) {
           // Verificar que el token sea válido llamando a /auth/me
           const user = await apiClient.getCurrentUser();
@@ -183,7 +154,10 @@ const App: React.FC = () => {
             isAuthenticated: true,
             user: user as any,
           });
-          console.log("Auth Flow (restoreSession): Session restored from localStorage");
+          console.log("Auth Flow (restoreSession): Session restored from localStorage", user);
+        } else {
+          console.log("Auth Flow (restoreSession): No token found, user not authenticated");
+          setAuthState({ isAuthenticated: false, user: null });
         }
       } catch (error) {
         console.error("Auth Flow (restoreSession): Error restoring session:", error);
@@ -191,6 +165,7 @@ const App: React.FC = () => {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
       } finally {
+        console.log("Auth Flow (restoreSession): Setting isSessionLoading to false");
         setIsSessionLoading(false);
       }
     };
@@ -219,85 +194,13 @@ const App: React.FC = () => {
     loadAppData();
   }, [authState.isAuthenticated, fetchEmployees, fetchRecords, fetchLeaveRequests, fetchUsers]);
 
-  useEffect(() => {
-    console.log("Auth Flow (onAuthStateChange): Setting up listener...");
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth Flow (onAuthStateChange): Event:", event, "Session:", session);
-      try {
-        if (session) {
-          console.log("Auth Flow (onAuthStateChange): Session found. User ID:", session.user.id);
-          const { data: profile, error: profileError } = await supabase.from('profiles').select('*, roles(name)').eq('id', session.user.id).single();
-
-          if (profileError) {
-            console.error("Auth Flow (onAuthStateChange): Error fetching profile:", profileError);
-            throw profileError;
-          }
-          console.log("Auth Flow (onAuthStateChange): Raw profile data:", profile); // Nuevo log
-          console.log("Auth Flow (onAuthStateChange): Profile roles property:", profile?.roles); // Nuevo log
-
-          const roleName = (profile?.roles as { name: string } | null)?.name;
-          console.log("Auth Flow (onAuthStateChange): Extracted role name:", roleName);
-
-          if (profile && roleName && (roleName === 'admin' || roleName === 'superadmin' || roleName === 'hr_manager' || roleName === 'department_head')) { // Incluir nuevos roles
-            console.log("Auth Flow (onAuthStateChange): User has an authorized role.");
-            const user: User = {
-              id: session.user.id,
-              email: session.user.email,
-              full_name: profile.full_name,
-              role: roleName,
-              avatar_url: profile.avatar_url,
-            };
-            setAuthState({ isAuthenticated: true, user });
-            console.log("Auth Flow (onAuthStateChange): AuthState updated to authenticated. User:", user.full_name, "Role:", user.role);
-          } else {
-            console.warn("Auth Flow (onAuthStateChange): User role not authorized or profile/role missing. Role:", roleName, "Profile exists:", !!profile);
-            await supabase.auth.signOut();
-            setAuthState({ isAuthenticated: false, user: null });
-          }
-        } else {
-          console.log("Auth Flow (onAuthStateChange): No session found.");
-          setAuthState({ isAuthenticated: false, user: null });
-        }
-      } catch (error) {
-        console.error("Auth Flow (onAuthStateChange): Error handling auth state change:", error);
-        setAuthState({ isAuthenticated: false, user: null });
-      } finally {
-        console.log("Auth Flow (onAuthStateChange): Setting isSessionLoading to false.");
-        setIsSessionLoading(false);
-      }
-    });
-
-    return () => {
-      console.log("Auth Flow (onAuthStateChange): Unsubscribing from listener.");
-      subscription.unsubscribe();
-    };
-  }, []);
+  // Ya no necesitamos listener de Supabase - usamos JWT puro con localStorage
 
   useEffect(() => {
     if (!authState.isAuthenticated) return;
 
-    console.log("Realtime: Setting up channels for authenticated user.");
-    const recordsChannel = supabase.channel('public:attendance_records').on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_records' }, () => { console.log("Realtime: attendance_records change, refetching."); fetchRecords(); }).subscribe();
-    const employeesChannel = supabase.channel('public:employees').on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => { console.log("Realtime: employees change, refetching."); fetchEmployees(); }).subscribe();
-    const profilesChannel = supabase.channel('public:profiles').on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-      console.log("Realtime: profiles change, refreshing user and fetching users.");
-      refreshUser(); // Para el perfil del usuario actual
-      fetchUsers(); // Para la lista de usuarios en UserManagement
-    }).subscribe();
-    const leaveRequestsChannel = supabase.channel('public:leave_requests').on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => { console.log("Realtime: leave_requests change, refetching."); fetchLeaveRequests(); }).subscribe();
-    const rolesChannel = supabase.channel('public:roles').on('postgres_changes', { event: '*', schema: 'public', table: 'roles' }, () => { console.log("Realtime: roles change, refreshing user."); refreshUser(); }).subscribe(); // Refresh user if roles change
-    const rolePermissionsChannel = supabase.channel('public:role_permissions').on('postgres_changes', { event: '*', schema: 'public', table: 'role_permissions' }, () => { console.log("Realtime: role_permissions change, refreshing user."); refreshUser(); }).subscribe(); // Refresh user if role permissions change
-
-
-    return () => {
-      console.log("Realtime: Unsubscribing from channels.");
-      supabase.removeChannel(recordsChannel);
-      supabase.removeChannel(employeesChannel);
-      supabase.removeChannel(profilesChannel);
-      supabase.removeChannel(leaveRequestsChannel);
-      supabase.removeChannel(rolesChannel);
-      supabase.removeChannel(rolePermissionsChannel);
-    };
+    // Real-time updates manejados exclusivamente por Socket.io (no Supabase)
+    console.log("Realtime: Todas las actualizaciones en tiempo real se manejan via Socket.io");
   }, [authState.isAuthenticated, fetchRecords, fetchEmployees, refreshUser, authState.user?.id, fetchLeaveRequests, fetchUsers]);
 
   // 🔌 WebSocket - Escuchar eventos en tiempo real
@@ -443,8 +346,8 @@ const AppRoutes = () => {
   console.log("AppRoutes: isSessionLoading:", isSessionLoading);
   console.log("AppRoutes: isAppDataLoading:", isAppDataLoading);
 
-  if (isSessionLoading || isAppDataLoading) { // Usar ambos estados de carga
-    return <div className="min-h-screen flex items-center justify-center bg-slate-900"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>;
+  if (isSessionLoading || isAppDataLoading) {
+    return <LoadingScreen />;
   }
 
   return (

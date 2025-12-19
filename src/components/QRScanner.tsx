@@ -39,16 +39,27 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailu
           }
         } else {
           const msg = 'No se encontraron cámaras disponibles en este dispositivo.';
+          console.error('QR Scanner: No cameras found');
           if (onScanFailureRef.current) {
             onScanFailureRef.current(msg);
           }
         }
       } catch (err) {
-        const errorMessage = String(err);
+        console.error('QR Scanner: Error accessing cameras', err);
+        const errorMessage = err ? String(err) : 'Unknown error';
         let displayMessage = 'Error al acceder a las cámaras. Verifique que no estén en uso.';
-        if (errorMessage.toLowerCase().includes('permission')) {
+
+        // Detectar diferentes tipos de errores
+        if (errorMessage.toLowerCase().includes('permission') || errorMessage.toLowerCase().includes('notallowed')) {
           displayMessage = 'Permiso de cámara denegado. Por favor, habilítelo en su navegador.';
+        } else if (errorMessage.toLowerCase().includes('notfound') || errorMessage.toLowerCase().includes('no camera')) {
+          displayMessage = 'No se detectó ninguna cámara en este dispositivo.';
+        } else if (errorMessage.toLowerCase().includes('notreadable') || errorMessage.toLowerCase().includes('in use')) {
+          displayMessage = 'La cámara está siendo usada por otra aplicación.';
+        } else if (!err) {
+          displayMessage = 'No se puede acceder a la cámara. Verifique permisos del navegador.';
         }
+
         if (onScanFailureRef.current) {
           onScanFailureRef.current(displayMessage);
         }
@@ -65,7 +76,7 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanFailu
     }
 
     onScanSuccessRef.current(decodedText);
-    
+
     setIsScanningPaused(true);
     setTimeout(() => {
       setIsScanningPaused(false);

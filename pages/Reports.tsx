@@ -585,9 +585,24 @@ const Reports: React.FC = () => {
 
       {/* Datos del reporte */}
       {loading ? (
-        <div className="bg-white rounded-lg shadow p-12 text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
-          <p className="mt-4 text-gray-600">Generando reporte...</p>
+        <div className="bg-white rounded-lg shadow p-12">
+          <div className="space-y-6 animate-pulse">
+            <div className="h-6 bg-gray-200 rounded w-48 mx-auto mb-8" />
+            <div className="space-y-3">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="flex gap-4 items-center">
+                  <div className="h-4 bg-gray-100 rounded flex-1" />
+                  <div className="h-4 bg-gray-100 rounded flex-1" />
+                  <div className="h-4 bg-gray-100 rounded flex-1" />
+                  <div className="h-4 bg-gray-100 rounded w-20" />
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-center gap-2 pt-4">
+              <div className="h-10 bg-gray-200 rounded w-32" />
+              <div className="h-10 bg-gray-200 rounded w-32" />
+            </div>
+          </div>
         </div>
       ) : (
         renderReportData()

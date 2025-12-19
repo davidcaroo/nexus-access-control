@@ -6,6 +6,7 @@ import { Plus, Edit, Trash2, X, Shield, Check, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { AppContext } from '../../App';
+import { TableSkeleton } from '../../components/LoadingScreen';
 
 interface RoleFormData {
   id?: string;
@@ -158,7 +159,20 @@ const RolePermissionManagement: React.FC = () => {
   };
 
   if (isLoading) {
-    return <div className="text-center py-12 text-gray-500">Cargando roles y permisos...</div>;
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div className="space-y-2">
+            <div className="h-8 bg-gray-200 rounded w-80 animate-pulse" />
+            <div className="h-4 bg-gray-100 rounded w-96 animate-pulse" />
+          </div>
+          <div className="h-10 bg-gray-200 rounded w-32 animate-pulse" />
+        </div>
+        <Card>
+          <TableSkeleton rows={6} columns={4} />
+        </Card>
+      </div>
+    );
   }
 
   // Solo superadmins pueden ver esta página

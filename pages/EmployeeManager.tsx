@@ -7,9 +7,10 @@ import { analyzeIDCard } from '../services/geminiService';
 import { apiClient } from '../src/services/apiClient';
 import { usePermissions } from '../src/context/PermissionsContext';
 import toast from 'react-hot-toast';
+import { TableSkeleton } from '../components/LoadingScreen';
 
 const EmployeeManager: React.FC = () => {
-  const { employees, addEmployee, updateEmployee, deleteEmployee, deleteAllEmployees, fetchEmployees } = useContext(AppContext)!;
+  const { employees, addEmployee, updateEmployee, deleteEmployee, deleteAllEmployees, fetchEmployees, isAppDataLoading } = useContext(AppContext)!;
   const { can } = usePermissions();
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,6 +36,31 @@ const EmployeeManager: React.FC = () => {
     e.cedula.includes(searchTerm) ||
     e.departamento?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Mostrar skeleton mientras cargan los datos
+  if (isAppDataLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+          <div className="space-y-2">
+            <div className="h-8 bg-gray-200 rounded w-64 animate-pulse" />
+            <div className="h-4 bg-gray-100 rounded w-96 animate-pulse" />
+          </div>
+          <div className="flex gap-2">
+            <div className="h-10 bg-gray-200 rounded w-32 animate-pulse" />
+            <div className="h-10 bg-gray-200 rounded w-40 animate-pulse" />
+            <div className="h-10 bg-gray-200 rounded w-36 animate-pulse" />
+          </div>
+        </div>
+        <Card>
+          <div className="p-4 border-b">
+            <div className="h-10 bg-gray-100 rounded w-full max-w-sm animate-pulse" />
+          </div>
+          <TableSkeleton rows={10} columns={7} />
+        </Card>
+      </div>
+    );
+  }
 
   const handleOpenModal = (emp?: Employee) => {
     if (emp) {

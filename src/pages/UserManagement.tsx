@@ -6,6 +6,7 @@ import { Plus, Edit, Trash2, X, UserX, UserCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { AppContext } from '../../App'; // Importar AppContext
+import { TableSkeleton } from '../../components/LoadingScreen';
 
 const UserManagement: React.FC = () => {
   const { users, isAppDataLoading, fetchUsers } = useContext(AppContext)!; // Obtener users, isAppDataLoading y fetchUsers del contexto
@@ -153,7 +154,22 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  if (isAppDataLoading || isLoadingRoles) return <div>Cargando usuarios y roles...</div>; // Usar ambos estados de carga
+  if (isAppDataLoading || isLoadingRoles) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div className="space-y-2">
+            <div className="h-8 bg-gray-200 rounded w-64 animate-pulse" />
+            <div className="h-4 bg-gray-100 rounded w-96 animate-pulse" />
+          </div>
+          <div className="h-10 bg-gray-200 rounded w-32 animate-pulse" />
+        </div>
+        <Card>
+          <TableSkeleton rows={8} columns={5} />
+        </Card>
+      </div>
+    );
+  }
   // Si no hay usuarios y no está cargando, podría ser un error de permisos o que no hay usuarios.
   // El error ya se maneja en App.tsx y se loguea. Aquí solo mostramos un mensaje si la lista está vacía.
   if (users.length === 0 && !isAppDataLoading) return <div className="text-red-500 bg-red-100 p-4 rounded-lg">No se pudieron cargar los usuarios o no hay usuarios disponibles. Solo los superadministradores pueden ver esta página.</div>;
