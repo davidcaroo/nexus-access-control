@@ -346,48 +346,20 @@ const Reports: React.FC = () => {
         </div>
 
         <div className="p-6">
-          {/* Estadísticas generales */}
-          {reportData.estadisticas && (
+          {/* Estadísticas - ESTRUCTURA UNIFICADA */}
+          {reportData.stats && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              {Object.entries(reportData.estadisticas).map(([key, value]) => (
-                <div key={key} className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-xs text-gray-600 uppercase mb-1">
+              {Object.entries(reportData.stats).filter(([key]) => typeof reportData.stats[key] !== 'object').map(([key, value]) => (
+                <div key={key} className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
+                  <p className="text-xs text-blue-700 uppercase mb-1 font-medium">
                     {key.replace(/_/g, ' ')}
                   </p>
-                  <p className="text-2xl font-bold text-gray-900">{value as any}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Métricas (para consolidado mensual) */}
-          {reportData.metricas && (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-              {Object.entries(reportData.metricas).map(([key, value]) => (
-                <div key={key} className="bg-blue-50 rounded-lg p-4">
-                  <p className="text-xs text-blue-700 uppercase mb-1">
-                    {key.replace(/_/g, ' ')}
-                  </p>
-                  <p className="text-xl font-bold text-blue-900">
-                    {typeof value === 'number' ? value.toFixed(1) : value}
-                    {key.includes('tasa') || key.includes('promedio') ? '%' : ''}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* KPIs (para dashboard ejecutivo) */}
-          {reportData.kpis && (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-              {Object.entries(reportData.kpis).map(([key, value]) => (
-                <div key={key} className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-4">
-                  <p className="text-xs text-indigo-700 uppercase mb-1">
-                    {key.replace(/_/g, ' ')}
-                  </p>
-                  <p className="text-xl font-bold text-indigo-900">
-                    {typeof value === 'number' ? value.toFixed(1) : value}
-                    {key.includes('tasa') || key.includes('promedio') || key.includes('indice') ? '%' : ''}
+                  <p className="text-2xl font-bold text-blue-900">
+                    {typeof value === 'number' ? (
+                      key.includes('tasa') || key.includes('promedio') || key.includes('indice') || key.includes('porcentaje')
+                        ? `${value.toFixed(1)}%`
+                        : value.toFixed(0)
+                    ) : value}
                   </p>
                 </div>
               ))}
@@ -422,41 +394,16 @@ const Reports: React.FC = () => {
             </div>
           )}
 
-          {/* Empleados presentes/ausentes */}
-          {reportData.empleados_presentes && (
+          {/* Información de employees - ESTRUCTURA UNIFICADA */}
+          {reportData.employees && (
             <div className="space-y-6">
-              <div>
-                <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                  <CheckCircle className="text-green-600" size={20} />
-                  Empleados Presentes ({reportData.empleados_presentes.length})
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {reportData.empleados_presentes.map((emp: any) => (
-                    <div key={emp.id} className="bg-green-50 border border-green-200 rounded-lg p-3">
-                      <p className="font-medium text-gray-900">{emp.nombre}</p>
-                      <p className="text-sm text-gray-600">{emp.cargo} - {emp.departamento}</p>
-                      {emp.hora_entrada && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Entrada: {emp.hora_entrada}
-                          {emp.minutos_tarde > 0 && (
-                            <span className="text-amber-600 ml-2">({emp.minutos_tarde} min tarde)</span>
-                          )}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {reportData.empleados_ausentes && reportData.empleados_ausentes.length > 0 && (
+              {/* Empleados (cuando sea array directo del backend) */}
+              {Array.isArray(reportData.employees) && reportData.employees.length > 0 && (
                 <div>
-                  <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                    <AlertCircle className="text-red-600" size={20} />
-                    Empleados Ausentes ({reportData.empleados_ausentes.length})
-                  </h4>
+                  <h4 className="font-semibold text-gray-800 mb-3">Empleados ({reportData.employees.length})</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {reportData.empleados_ausentes.map((emp: any) => (
-                      <div key={emp.id} className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    {reportData.employees.map((emp: any) => (
+                      <div key={emp.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                         <p className="font-medium text-gray-900">{emp.nombre}</p>
                         <p className="text-sm text-gray-600">{emp.cargo} - {emp.departamento}</p>
                       </div>
@@ -464,38 +411,95 @@ const Reports: React.FC = () => {
                   </div>
                 </div>
               )}
-            </div>
-          )}
 
-          {/* Top puntualidad */}
-          {reportData.mas_puntuales && (
-            <div className="grid md:grid-cols-2 gap-6 mb-6">
-              <div>
-                <h4 className="font-semibold text-green-700 mb-3">Top 5 Más Puntuales</h4>
-                {reportData.mas_puntuales.map((emp: any, idx: number) => (
-                  <div key={emp.id} className="bg-green-50 rounded p-3 mb-2">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium">#{idx + 1} {emp.nombre}</span>
-                      <span className="text-sm text-green-700">{emp.porcentaje_puntualidad}%</span>
-                    </div>
-                    <p className="text-xs text-gray-600">Tardanzas: {emp.total_tardanzas}</p>
+              {/* Top puntuales */}
+              {reportData.employees?.mas_puntuales && reportData.employees?.menos_puntuales && (
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="font-semibold text-green-700 mb-3">Top 5 Más Puntuales</h4>
+                    {reportData.employees.mas_puntuales.map((emp: any, idx: number) => (
+                      <div key={emp.id} className="bg-green-50 rounded p-3 mb-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">#{idx + 1} {emp.nombre}</span>
+                          <span className="text-sm text-green-700">{emp.porcentaje_puntualidad}%</span>
+                        </div>
+                        <p className="text-xs text-gray-600">Tardanzas: {emp.total_tardanzas}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <div>
-                <h4 className="font-semibold text-red-700 mb-3">Top 5 Menos Puntuales</h4>
-                {reportData.menos_puntuales?.map((emp: any, idx: number) => (
-                  <div key={emp.id} className="bg-red-50 rounded p-3 mb-2">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium">#{idx + 1} {emp.nombre}</span>
-                      <span className="text-sm text-red-700">{emp.porcentaje_puntualidad}%</span>
-                    </div>
-                    <p className="text-xs text-gray-600">
-                      Tardanzas: {emp.total_tardanzas} ({emp.promedio_minutos_tardanza} min promedio)
-                    </p>
+                  <div>
+                    <h4 className="font-semibold text-red-700 mb-3">Top 5 Menos Puntuales</h4>
+                    {reportData.employees.menos_puntuales.map((emp: any, idx: number) => (
+                      <div key={emp.id} className="bg-red-50 rounded p-3 mb-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">#{idx + 1} {emp.nombre}</span>
+                          <span className="text-sm text-red-700">{emp.porcentaje_puntualidad}%</span>
+                        </div>
+                        <p className="text-xs text-gray-600">
+                          Tardanzas: {emp.total_tardanzas} ({emp.promedio_minutos_tardanza} min promedio)
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
+
+              {/* Ausentes y permisos */}
+              {reportData.employees?.ausentes && (
+                <div>
+                  <h4 className="font-semibold text-gray-800 mb-3">Empleados Ausentes</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {reportData.employees.ausentes.map((emp: any) => (
+                      <div key={emp.id} className="bg-red-50 border border-red-200 rounded-lg p-3">
+                        <p className="font-medium text-gray-900">{emp.nombre}</p>
+                        <p className="text-sm text-gray-600">{emp.cargo} - {emp.departamento}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {emp.tiene_justificacion ? '✓ Justificado' : '✗ Sin justificar'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Altas y bajas */}
+              {reportData.employees?.altas && (
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="font-semibold text-green-700 mb-3">Altas ({reportData.employees.altas.length})</h4>
+                    {reportData.employees.altas.map((emp: any) => (
+                      <div key={emp.id} className="bg-green-50 rounded p-3 mb-2">
+                        <p className="font-medium">{emp.nombre}</p>
+                        <p className="text-xs text-gray-600">{emp.cargo} - {emp.fecha}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {reportData.employees?.bajas && (
+                    <div>
+                      <h4 className="font-semibold text-red-700 mb-3">Bajas ({reportData.employees.bajas.length})</h4>
+                      {reportData.employees.bajas.map((emp: any) => (
+                        <div key={emp.id} className="bg-red-50 rounded p-3 mb-2">
+                          <p className="font-medium">{emp.nombre}</p>
+                          <p className="text-xs text-gray-600">{emp.cargo} - {emp.fecha}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Alertas */}
+              {reportData.employees?.alertas && reportData.employees.alertas.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-amber-700 mb-3">⚠️ Alertas</h4>
+                  {reportData.employees.alertas.map((alerta: any, idx: number) => (
+                    <div key={idx} className="bg-amber-50 border border-amber-200 rounded p-3 mb-2">
+                      <p className="font-medium">{alerta.empleado}</p>
+                      <p className="text-sm text-gray-700">{alerta.detalle}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
