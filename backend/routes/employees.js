@@ -2,6 +2,7 @@ import express from 'express';
 import pool from '../config/db.js';
 import { verifyToken, verifySuperAdmin, verifyAdminOrHR } from '../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
+import { io } from '../server.js';
 
 const router = express.Router();
 
@@ -118,6 +119,156 @@ router.post('/', verifyToken, verifyAdminOrHR, async (req, res) => {
     }
 });
 
+// POST /api/employees/bulk - Carga masiva de empleados
+router.post('/bulk', verifyToken, verifyAdminOrHR, async (req, res) => {
+    const { employees } = req.body || {};
+
+    if (!Array.isArray(employees) || employees.length === 0) {
+        return res.status(400).json({ error: 'Invalid payload', message: 'Debe enviar un arreglo de empleados' });
+    }
+
+    if (employees.length > 1000) {
+        return res.status(400).json({ error: 'Too many records', message: 'El máximo permitido por carga es de 1000 empleados' });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const invalidEntries = [];
+    const normalized = [];
+
+    employees.forEach((emp, index) => {
+        const cedula = typeof emp?.cedula === 'string' ? emp.cedula.trim() : String(emp?.cedula || '').trim();
+        const nombre = typeof emp?.nombre === 'string' ? emp.nombre.trim() : '';
+
+        if (!cedula || !nombre) {
+            invalidEntries.push({ index, cedula: emp?.cedula, reason: 'Faltan cédula o nombre' });
+            return;
+        }
+
+        normalized.push({
+            index,
+            cedula,
+            nombre,
+            foto: emp?.foto || null,
+            cargo: emp?.cargo || null,
+            departamento: emp?.departamento || null,
+            horario_entrada: emp?.horario_entrada || '09:00:00',
+            horario_salida: emp?.horario_salida || '18:00:00',
+            estado: emp?.estado || 'activo',
+            fecha_ingreso: emp?.fecha_ingreso || today
+        });
+    });
+
+    if (normalized.length === 0) {
+        return res.status(400).json({
+            error: 'No valid employees',
+            message: 'Ningún registro contiene cédula y nombre válidos',
+            invalidEntries
+        });
+    }
+
+    const duplicatesInFile = [];
+    const uniqueEmployees = [];
+    const seenCedulas = new Set();
+
+    normalized.forEach(emp => {
+        if (seenCedulas.has(emp.cedula)) {
+            duplicatesInFile.push(emp.cedula);
+            return;
+        }
+        seenCedulas.add(emp.cedula);
+        uniqueEmployees.push(emp);
+    });
+
+    let connection;
+    try {
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        let existingCedulas = [];
+        if (uniqueEmployees.length > 0) {
+            const cedulaValues = uniqueEmployees.map(emp => emp.cedula);
+            const placeholders = cedulaValues.map(() => '?').join(', ');
+            const [rows] = await connection.query(
+                `SELECT cedula FROM employees WHERE cedula IN (${placeholders})`,
+                cedulaValues
+            );
+            existingCedulas = rows.map(row => row.cedula);
+        }
+
+        const existingCedulasSet = new Set(existingCedulas);
+        const employeesToInsert = uniqueEmployees.filter(emp => !existingCedulasSet.has(emp.cedula));
+
+        if (employeesToInsert.length === 0) {
+            await connection.rollback();
+            connection.release();
+            return res.status(200).json({
+                message: 'No se importaron empleados',
+                inserted: 0,
+                skippedExistingCount: existingCedulas.length,
+                skippedExistingCedulas: existingCedulas,
+                duplicatesInFileCount: duplicatesInFile.length,
+                duplicatesInFile,
+                invalidEntriesCount: invalidEntries.length,
+                invalidEntries
+            });
+        }
+
+        const placeholders = employeesToInsert.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const values = [];
+
+        employeesToInsert.forEach(emp => {
+            const id = uuidv4();
+            values.push(
+                id,
+                emp.cedula,
+                emp.nombre,
+                emp.foto,
+                emp.cargo,
+                emp.departamento,
+                emp.horario_entrada,
+                emp.horario_salida,
+                emp.estado,
+                emp.fecha_ingreso,
+                `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(emp.cedula)}`
+            );
+        });
+
+        await connection.query(
+            `INSERT INTO employees 
+            (id, cedula, nombre, foto, cargo, departamento, horario_entrada, horario_salida, estado, fecha_ingreso, qr_code_url)
+            VALUES ${placeholders}`,
+            values
+        );
+
+        await connection.commit();
+        connection.release();
+
+        io.emit('employee:updated');
+
+        return res.status(201).json({
+            message: 'Carga masiva procesada',
+            inserted: employeesToInsert.length,
+            skippedExistingCount: existingCedulas.length,
+            skippedExistingCedulas: existingCedulas,
+            duplicatesInFileCount: duplicatesInFile.length,
+            duplicatesInFile,
+            invalidEntriesCount: invalidEntries.length,
+            invalidEntries
+        });
+    } catch (error) {
+        if (connection) {
+            try {
+                await connection.rollback();
+                connection.release();
+            } catch (e) {
+                console.error('Error rolling back connection:', e);
+            }
+        }
+        console.error('Error en carga masiva de empleados:', error);
+        return res.status(500).json({ error: 'Internal server error', message: error.message || 'Internal server error' });
+    }
+});
+
 // PATCH /api/employees/:id - Actualizar empleado
 router.patch('/:id', verifyToken, verifyAdminOrHR, async (req, res) => {
     let connection;
@@ -222,11 +373,10 @@ router.patch('/:id', verifyToken, verifyAdminOrHR, async (req, res) => {
 });
 
 // DELETE /api/employees/:id - Eliminar un empleado
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id', verifyToken, verifyAdminOrHR, async (req, res) => {
     let connection;
     try {
         const { id } = req.params;
-        const userId = req.user.id;
 
         connection = await pool.getConnection();
 
@@ -239,26 +389,6 @@ router.delete('/:id', verifyToken, async (req, res) => {
         if (employees.length === 0) {
             connection.release();
             return res.status(404).json({ error: 'Employee not found', message: 'Employee not found' });
-        }
-
-        // Obtener el rol del usuario
-        const [userRole] = await connection.execute(
-            'SELECT role_id FROM user_roles WHERE user_id = ?',
-            [userId]
-        );
-
-        const [role] = await connection.execute(
-            'SELECT name FROM roles WHERE id = ?',
-            [userRole[0]?.role_id]
-        );
-
-        const userRoleName = role[0]?.name;
-
-        // Superadmin puede eliminar cualquier empleado
-        // Admin y HR pueden eliminar empleados
-        if (userRoleName !== 'superadmin' && userRoleName !== 'admin' && userRoleName !== 'hr_manager') {
-            connection.release();
-            return res.status(403).json({ error: 'Forbidden', message: 'No tienes permisos para eliminar empleados' });
         }
 
         await connection.execute(
@@ -282,31 +412,10 @@ router.delete('/:id', verifyToken, async (req, res) => {
 });
 
 // DELETE /api/employees - Eliminar todos los empleados
-router.delete('/', verifyToken, async (req, res) => {
+router.delete('/', verifyToken, verifySuperAdmin, async (req, res) => {
     let connection;
     try {
-        const userId = req.user.id;
-
         connection = await pool.getConnection();
-
-        // Obtener el rol del usuario
-        const [userRole] = await connection.execute(
-            'SELECT role_id FROM user_roles WHERE user_id = ?',
-            [userId]
-        );
-
-        const [role] = await connection.execute(
-            'SELECT name FROM roles WHERE id = ?',
-            [userRole[0]?.role_id]
-        );
-
-        const userRoleName = role[0]?.name;
-
-        // Solo superadmin puede eliminar todos los empleados
-        if (userRoleName !== 'superadmin') {
-            connection.release();
-            return res.status(403).json({ error: 'Forbidden', message: 'Solo superadmins pueden eliminar todos los empleados' });
-        }
 
         const [result] = await connection.execute(
             'DELETE FROM employees'

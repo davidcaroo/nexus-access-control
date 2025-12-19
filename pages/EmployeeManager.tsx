@@ -4,7 +4,7 @@ import { Button, Input, Card, Badge } from '../components/UIComponents';
 import { Search, Plus, Upload, Sparkles, X, Camera, QrCode, FileUp, Trash2, AlertCircle, Download } from 'lucide-react';
 import { Employee } from '../types';
 import { analyzeIDCard } from '../services/geminiService';
-import { supabase } from '../src/integrations/supabase/client';
+import { apiClient } from '../src/services/apiClient';
 import { usePermissions } from '../src/context/PermissionsContext';
 import toast from 'react-hot-toast';
 
@@ -166,7 +166,6 @@ const EmployeeManager: React.FC = () => {
           horario_salida: '18:00:00',
           fecha_ingreso: new Date().toISOString().split('T')[0],
           foto: `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(nombre)}`,
-          qr_code_url: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(cedula)}`,
         };
       }).filter((emp): emp is NonNullable<typeof emp> => emp !== null);
 
@@ -175,37 +174,34 @@ const EmployeeManager: React.FC = () => {
         return;
       }
 
-      const { data: existingEmployees, error: fetchError } = await supabase.from('employees').select('cedula');
-      if (fetchError) throw fetchError;
-      const existingCedulas = new Set(existingEmployees.map(e => e.cedula));
+      const result = await apiClient.post('/employees/bulk', { employees: parsedEmployees });
 
-      const employeesToInsert = [];
-      let skippedCount = 0;
-      const cedulasInCsv = new Set();
+      // Refrescar lista de empleados inmediatamente tras la respuesta del backend
+      await fetchEmployees();
 
-      for (const emp of parsedEmployees) {
-        if (existingCedulas.has(emp.cedula) || cedulasInCsv.has(emp.cedula)) {
-          skippedCount++;
-        } else {
-          employeesToInsert.push(emp);
-          cedulasInCsv.add(emp.cedula);
-        }
+      if (result.inserted > 0) {
+        toast.success(`${result.inserted} empleados nuevos registrados.`);
       }
 
-      if (employeesToInsert.length > 0) {
-        const { error: insertError } = await supabase.from('employees').insert(employeesToInsert);
-        if (insertError) throw insertError;
+      if (result.skippedExistingCount > 0) {
+        toast.success(`${result.skippedExistingCount} empleados ya existían y fueron omitidos.`);
       }
 
-      if (employeesToInsert.length > 0) {
-        toast.success(`${employeesToInsert.length} empleados nuevos registrados.`);
-        fetchEmployees();
+      if (result.duplicatesInFileCount > 0) {
+        toast.success(`${result.duplicatesInFileCount} registros duplicados en el archivo fueron ignorados.`);
       }
-      if (skippedCount > 0) {
-        toast.success(`${skippedCount} empleados fueron omitidos por ser duplicados.`);
+
+      if (result.invalidEntriesCount > 0) {
+        toast.error(`${result.invalidEntriesCount} registros fueron inválidos (faltan datos obligatorios).`);
       }
-      if (employeesToInsert.length === 0 && skippedCount === 0) {
-        toast.error("No se procesó ningún empleado. Verifique el archivo.");
+
+      if (
+        result.inserted === 0 &&
+        result.skippedExistingCount === 0 &&
+        result.duplicatesInFileCount === 0 &&
+        result.invalidEntriesCount === 0
+      ) {
+        toast('No se procesó ningún empleado. Verifique el archivo.');
       }
 
     } catch (err: any) {

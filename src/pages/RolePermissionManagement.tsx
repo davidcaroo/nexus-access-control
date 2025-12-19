@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useContext } from 'react';
-import { supabase } from '../integrations/supabase/client';
 import { apiClient } from '../services/apiClient';
 import { Role, Permission, RoleName } from '../../types';
 import { Card, Button, Input, Badge } from '../../components/UIComponents';
