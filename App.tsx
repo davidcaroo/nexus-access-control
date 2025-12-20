@@ -16,6 +16,7 @@ import Dashboard from './pages/Dashboard';
 import AccessTerminal from './pages/AccessTerminal';
 import EmployeeManager from './pages/EmployeeManager';
 import Reports from './pages/Reports';
+import ReportsOperational from './pages/ReportsOperational';
 import UserManagement from './src/pages/UserManagement';
 import OvertimeReport from './pages/OvertimeReport';
 import Settings from './src/pages/Settings';
@@ -365,6 +366,7 @@ const AppRoutes = () => {
         <Route path="roles-permissions" element={<RolePermissionManagement />} />
         <Route path="settings" element={<Settings />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="reports-operational" element={<ReportsOperational />} />
         <Route index element={<Navigate to="/admin/dashboard" />} />
       </Route>
       <Route path="*" element={<Navigate to="/" />} />

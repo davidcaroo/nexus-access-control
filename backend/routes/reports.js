@@ -4,10 +4,14 @@ import { verifyToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// ============ NIVEL 1: REPORTES OPERATIVOS ============
+// ============ NIVEL 1: REPORTES OPERACIONALES ============
 
-// 1. Reporte Diario de Asistencia
-router.get('/daily-attendance', verifyToken, async (req, res) => {
+/**
+ * REPORTE 1: Asistencia Diaria
+ * Muestra todos los empleados activos con sus marcaciones del día
+ * Incluye: contexto (almuerzo), horas trabajadas netas, tardanzas
+ */
+router.get('/operational/daily-attendance', verifyToken, async (req, res) => {
     let connection = null;
     try {
         const { date } = req.query;
@@ -15,89 +19,127 @@ router.get('/daily-attendance', verifyToken, async (req, res) => {
 
         connection = await pool.getConnection();
 
-        // Empleados activos
+        // Empleados activos con sus horarios
         const [employees] = await connection.execute(`
             SELECT 
                 e.id,
                 e.cedula,
                 e.nombre,
-                
                 e.cargo,
                 e.departamento,
                 e.horario_entrada,
-                e.horario_salida
+                e.horario_salida,
+                e.horario_almuerzo_inicio,
+                e.horario_almuerzo_fin
             FROM employees e
             WHERE e.estado = 'activo'
             ORDER BY e.nombre
         `);
 
-        // Registros del día
+        // Registros del día con contexto
         const [records] = await connection.execute(`
             SELECT 
                 ar.employee_id,
                 ar.tipo,
-                CONCAT(ar.fecha, ' ', ar.hora),
-                ar.hora as hora
+                ar.hora,
+                ar.contexto,
+                ar.tardanza
             FROM attendance_records ar
             WHERE ar.fecha = ?
-            ORDER BY CONCAT(ar.fecha, ' ', ar.hora)
+            ORDER BY ar.employee_id, ar.hora
         `, [targetDate]);
 
-        // Procesar datos
+        // Procesar datos con contexto de almuerzo
         const report = employees.map(emp => {
             const empRecords = records.filter(r => r.employee_id === emp.id);
-            const entrada = empRecords.find(r => r.tipo === 'entrada');
-            const salida = empRecords.find(r => r.tipo === 'salida');
+
+            // Separar por contexto
+            const jornadaEntrada = empRecords.find(r => r.contexto === 'jornada_entrada');
+            const almuerzaSalida = empRecords.find(r => r.contexto === 'almuerzo_salida');
+            const almuerzoEntrada = empRecords.find(r => r.contexto === 'almuerzo_entrada');
+            const jornadaSalida = empRecords.find(r => r.contexto === 'jornada_salida');
+
+            // Si no hay contexto, usar lógica básica
+            const primeraEntrada = jornadaEntrada || empRecords.find(r => r.tipo === 'entrada');
+            const ultimaSalida = jornadaSalida || empRecords.filter(r => r.tipo === 'salida').pop();
 
             let estado = 'ausente';
             let tardanzaMinutos = 0;
+            let horasTrabajadasMinutos = 0;
             let observaciones = [];
 
-            if (entrada) {
+            if (primeraEntrada) {
                 estado = 'presente';
 
                 // Calcular tardanza
-                if (emp.horario_entrada) {
+                if (emp.horario_entrada && primeraEntrada.tardanza) {
                     const [horaEntrada, minEntrada] = emp.horario_entrada.split(':').map(Number);
-                    const [horaReal, minReal] = entrada.hora.split(':').map(Number);
-
+                    const [horaReal, minReal] = primeraEntrada.hora.split(':').map(Number);
                     const minutosEsperados = horaEntrada * 60 + minEntrada;
                     const minutosReales = horaReal * 60 + minReal;
-                    const diferencia = minutosReales - minutosEsperados;
-
-                    if (diferencia > 15) {
-                        tardanzaMinutos = diferencia;
-                        observaciones.push(`Tardanza de ${diferencia} minutos`);
+                    tardanzaMinutos = minutosReales - minutosEsperados - 15; // Restar tolerancia
+                    if (tardanzaMinutos > 0) {
+                        observaciones.push(`Tardanza de ${tardanzaMinutos} min`);
                     }
                 }
 
-                if (!salida) {
-                    observaciones.push('No ha marcado salida');
+                // Calcular horas trabajadas NETAS (excluyendo almuerzo)
+                if (ultimaSalida) {
+                    const entradaMin = primeraEntrada.hora.split(':').reduce((h, m, i) => h + (i === 0 ? parseInt(m) * 60 : parseInt(m)), 0);
+                    const salidaMin = ultimaSalida.hora.split(':').reduce((h, m, i) => h + (i === 0 ? parseInt(m) * 60 : parseInt(m)), 0);
+
+                    horasTrabajadasMinutos = salidaMin - entradaMin;
+
+                    // Si tiene horario de almuerzo configurado y marcó almuerzo
+                    if (emp.horario_almuerzo_inicio && emp.horario_almuerzo_fin && almuerzaSalida && almuerzoEntrada) {
+                        const almuerzoSalidaMin = almuerzaSalida.hora.split(':').reduce((h, m, i) => h + (i === 0 ? parseInt(m) * 60 : parseInt(m)), 0);
+                        const almuerzoEntradaMin = almuerzoEntrada.hora.split(':').reduce((h, m, i) => h + (i === 0 ? parseInt(m) * 60 : parseInt(m)), 0);
+                        const tiempoAlmuerzo = almuerzoEntradaMin - almuerzoSalidaMin;
+                        horasTrabajadasMinutos -= tiempoAlmuerzo;
+                        observaciones.push(`Almuerzo: ${Math.floor(tiempoAlmuerzo / 60)}h ${tiempoAlmuerzo % 60}m`);
+                    }
+                } else {
+                    observaciones.push('Sin marcar salida');
                 }
             }
+
+            const horasTrabajadasStr = horasTrabajadasMinutos > 0
+                ? `${Math.floor(horasTrabajadasMinutos / 60)}h ${horasTrabajadasMinutos % 60}m`
+                : '--';
 
             return {
                 id: emp.id,
                 cedula: emp.cedula,
-                nombre: `${emp.nombre}`,
-                cargo: emp.cargo,
-                departamento: emp.departamento,
+                nombre: emp.nombre,
+                cargo: emp.cargo || '--',
+                departamento: emp.departamento || '--',
                 horario: `${emp.horario_entrada || '--'} - ${emp.horario_salida || '--'}`,
                 estado,
-                hora_entrada: entrada ? entrada.hora : null,
-                hora_salida: salida ? salida.hora : null,
-                tardanza_minutos: tardanzaMinutos,
-                observaciones: observaciones.join(', ') || null
+                jornada_entrada: jornadaEntrada?.hora || null,
+                almuerzo_salida: almuerzaSalida?.hora || null,
+                almuerzo_entrada: almuerzoEntrada?.hora || null,
+                jornada_salida: jornadaSalida?.hora || null,
+                horas_trabajadas: horasTrabajadasStr,
+                horas_trabajadas_minutos: horasTrabajadasMinutos,
+                tardanza_minutos: tardanzaMinutos > 0 ? tardanzaMinutos : 0,
+                tiene_almuerzo_configurado: !!(emp.horario_almuerzo_inicio && emp.horario_almuerzo_fin),
+                observaciones: observaciones.length > 0 ? observaciones.join(' | ') : null
             };
         });
 
-        // Estadísticas
+        // Estadísticas mejoradas
+        const presentes = report.filter(r => r.estado === 'presente');
         const stats = {
             total_empleados: employees.length,
-            presentes: report.filter(r => r.estado === 'presente').length,
+            presentes: presentes.length,
             ausentes: report.filter(r => r.estado === 'ausente').length,
             tardanzas: report.filter(r => r.tardanza_minutos > 0).length,
-            sin_marcar_salida: report.filter(r => r.estado === 'presente' && !r.hora_salida).length
+            sin_marcar_salida: presentes.filter(r => !r.jornada_salida).length,
+            con_almuerzo: presentes.filter(r => r.almuerzo_salida && r.almuerzo_entrada).length,
+            porcentaje_asistencia: Math.round((presentes.length / employees.length) * 100),
+            promedio_horas_trabajadas: presentes.length > 0
+                ? Math.round(presentes.reduce((sum, r) => sum + r.horas_trabajadas_minutos, 0) / presentes.length)
+                : 0
         };
 
         connection.release();
@@ -116,8 +158,12 @@ router.get('/daily-attendance', verifyToken, async (req, res) => {
     }
 });
 
-// 2. Reporte Semanal de Puntualidad
-router.get('/weekly-punctuality', verifyToken, async (req, res) => {
+/**
+ * REPORTE 2: Puntualidad Semanal
+ * Analiza tardanzas por empleado en un período específico
+ * Incluye: análisis por día de la semana, tendencias, top 5
+ */
+router.get('/operational/weekly-punctuality', verifyToken, async (req, res) => {
     let connection = null;
     try {
         const { startDate, endDate } = req.query;
@@ -128,81 +174,116 @@ router.get('/weekly-punctuality', verifyToken, async (req, res) => {
 
         connection = await pool.getConnection();
 
-        const [results] = await connection.execute(`
+        // Obtener tardanzas detalladas
+        const [tardanzas] = await connection.execute(`
             SELECT 
                 e.id,
                 e.cedula,
                 e.nombre,
-                
                 e.cargo,
                 e.departamento,
+                ar.fecha,
+                ar.hora as hora_entrada,
                 e.horario_entrada,
-                COUNT(DISTINCT ar.fecha) as dias_asistidos,
-                SUM(
-                    CASE 
-                        WHEN ar.tipo = 'entrada' AND e.horario_entrada IS NOT NULL 
-                        AND ar.hora > ADDTIME(e.horario_entrada, '00:15:00')
-                        THEN 1
-                        ELSE 0
-                    END
-                ) as total_tardanzas,
-                AVG(
-                    CASE 
-                        WHEN ar.tipo = 'entrada' AND e.horario_entrada IS NOT NULL 
-                        AND ar.hora > ADDTIME(e.horario_entrada, '00:15:00')
-                        THEN TIMESTAMPDIFF(MINUTE, 
-                            CONCAT(ar.fecha, ' ', e.horario_entrada),
-                            CONCAT(ar.fecha, ' ', ar.hora)
-                        )
-                        ELSE 0
-                    END
-                ) as promedio_minutos_tardanza
+                ar.tardanza,
+                DAYNAME(ar.fecha) as dia_semana,
+                CASE 
+                    WHEN ar.tardanza = 1 
+                    THEN TIMESTAMPDIFF(MINUTE, 
+                        CONCAT(ar.fecha, ' ', e.horario_entrada),
+                        CONCAT(ar.fecha, ' ', ar.hora)
+                    ) - 15
+                    ELSE 0
+                END as minutos_tarde
             FROM employees e
-            LEFT JOIN attendance_records ar ON e.id = ar.employee_id 
-                AND ar.fecha BETWEEN ? AND ?
+            INNER JOIN attendance_records ar ON e.id = ar.employee_id
             WHERE e.estado = 'activo'
-            GROUP BY e.id, e.cedula, e.nombre,  e.cargo, e.departamento, e.horario_entrada
-            ORDER BY total_tardanzas DESC, promedio_minutos_tardanza DESC
+                AND ar.fecha BETWEEN ? AND ?
+                AND ar.contexto = 'jornada_entrada'
+            ORDER BY e.nombre, ar.fecha
         `, [start, end]);
 
-        const report = results.map(r => ({
-            id: r.id,
-            cedula: r.cedula,
-            nombre: `${r.nombre}`,
-            cargo: r.cargo,
-            departamento: r.departamento,
-            dias_asistidos: r.dias_asistidos || 0,
-            total_tardanzas: r.total_tardanzas || 0,
-            promedio_minutos_tardanza: Math.round(r.promedio_minutos_tardanza || 0),
-            porcentaje_puntualidad: r.dias_asistidos > 0
-                ? Math.round(((r.dias_asistidos - (r.total_tardanzas || 0)) / r.dias_asistidos) * 100)
-                : 100
+        // Agrupar por empleado
+        const empleadosMap = new Map();
+
+        tardanzas.forEach(t => {
+            if (!empleadosMap.has(t.id)) {
+                empleadosMap.set(t.id, {
+                    id: t.id,
+                    cedula: t.cedula,
+                    nombre: t.nombre,
+                    cargo: t.cargo || '--',
+                    departamento: t.departamento || '--',
+                    dias_asistidos: 0,
+                    total_tardanzas: 0,
+                    minutos_acumulados: 0,
+                    tardanzas_por_dia: {
+                        Monday: 0, Tuesday: 0, Wednesday: 0,
+                        Thursday: 0, Friday: 0, Saturday: 0, Sunday: 0
+                    }
+                });
+            }
+
+            const emp = empleadosMap.get(t.id);
+            emp.dias_asistidos++;
+
+            if (t.tardanza) {
+                emp.total_tardanzas++;
+                emp.minutos_acumulados += t.minutos_tarde;
+                emp.tardanzas_por_dia[t.dia_semana]++;
+            }
+        });
+
+        const report = Array.from(empleadosMap.values()).map(emp => ({
+            ...emp,
+            promedio_minutos_tardanza: emp.total_tardanzas > 0
+                ? Math.round(emp.minutos_acumulados / emp.total_tardanzas)
+                : 0,
+            porcentaje_puntualidad: emp.dias_asistidos > 0
+                ? Math.round(((emp.dias_asistidos - emp.total_tardanzas) / emp.dias_asistidos) * 100)
+                : 100,
+            dia_mas_tardanzas: Object.entries(emp.tardanzas_por_dia)
+                .sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'
         }));
+
+        // Análisis por día de la semana
+        const tardanzasPorDia = {
+            Monday: 0, Tuesday: 0, Wednesday: 0,
+            Thursday: 0, Friday: 0, Saturday: 0, Sunday: 0
+        };
+
+        tardanzas.forEach(t => {
+            if (t.tardanza) {
+                tardanzasPorDia[t.dia_semana]++;
+            }
+        });
 
         // Top 5 más puntuales y menos puntuales
         const conAsistencia = report.filter(r => r.dias_asistidos > 0);
-        const top5Puntuales = conAsistencia
-            .sort((a, b) => b.porcentaje_puntualidad - a.porcentaje_puntualidad)
-            .slice(0, 5);
-        const top5Impuntuales = conAsistencia
-            .sort((a, b) => a.porcentaje_puntualidad - b.porcentaje_puntualidad)
-            .slice(0, 5);
+        const sortedByPuntualidad = [...conAsistencia].sort((a, b) =>
+            b.porcentaje_puntualidad - a.porcentaje_puntualidad
+        );
 
         connection.release();
 
         res.json({
             period: { start, end },
-            report,
+            report: report.sort((a, b) => a.porcentaje_puntualidad - b.porcentaje_puntualidad),
             stats: {
                 total_empleados: report.length,
                 con_tardanzas: report.filter(r => r.total_tardanzas > 0).length,
-                promedio_puntualidad: Math.round(
-                    report.reduce((sum, r) => sum + r.porcentaje_puntualidad, 0) / report.length
-                )
+                sin_tardanzas: report.filter(r => r.total_tardanzas === 0).length,
+                promedio_puntualidad: report.length > 0
+                    ? Math.round(report.reduce((sum, r) => sum + r.porcentaje_puntualidad, 0) / report.length)
+                    : 100,
+                total_tardanzas: report.reduce((sum, r) => sum + r.total_tardanzas, 0),
+                dia_mas_tardanzas: Object.entries(tardanzasPorDia)
+                    .sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'
             },
-            employees: {
-                mas_puntuales: top5Puntuales,
-                menos_puntuales: top5Impuntuales
+            analysis: {
+                tardanzas_por_dia: tardanzasPorDia,
+                top_5_puntuales: sortedByPuntualidad.slice(0, 5),
+                top_5_impuntuales: sortedByPuntualidad.slice(-5).reverse()
             }
         });
 
@@ -214,108 +295,158 @@ router.get('/weekly-punctuality', verifyToken, async (req, res) => {
     }
 });
 
-// 3. Reporte de Ausencias Activas
-router.get('/active-absences', verifyToken, async (req, res) => {
+/**
+ * REPORTE 3: Ausencias Activas
+ * Muestra todas las solicitudes de ausencia (permisos, vacaciones, licencias)
+ * que están activas o pendientes en un rango de fechas
+ */
+router.get('/operational/active-absences', verifyToken, async (req, res) => {
     let connection = null;
     try {
-        const { date } = req.query;
-        const targetDate = date || new Date().toISOString().split('T')[0];
+        const { startDate, endDate } = req.query;
+
+        // Por defecto: desde hoy hacia adelante (próximos 30 días)
+        const start = startDate || new Date().toISOString().split('T')[0];
+        const end = endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
         connection = await pool.getConnection();
 
-        // Empleados ausentes sin justificación
+        // Solicitudes de ausencia activas o pendientes
         const [absences] = await connection.execute(`
-            SELECT 
-                e.id,
-                e.cedula,
-                e.nombre,
-                
-                e.cargo,
-                e.departamento,
-                lr.id as permiso_id,
-                lr.request_type,
-                lr.fecha_inicio,
-                lr.fecha_fin,
-                lr.estado as permiso_estado,
-                lr.motivo
-            FROM employees e
-            LEFT JOIN leave_requests lr ON e.id = lr.employee_id 
-                AND ? BETWEEN DATE(lr.fecha_inicio) AND DATE(lr.fecha_fin)
-                AND lr.estado IN ('aprobado', 'pendiente')
-            LEFT JOIN attendance_records ar ON e.id = ar.employee_id 
-                AND ar.fecha = ?
-            WHERE e.estado = 'activo'
-                AND ar.id IS NULL
-            ORDER BY e.nombre
-        `, [targetDate, targetDate]);
-
-        const report = absences.map(a => ({
-            id: a.id,
-            cedula: a.cedula,
-            nombre: `${a.nombre}`,
-            cargo: a.cargo,
-            departamento: a.departamento,
-            tiene_justificacion: !!a.permiso_id,
-            permiso: a.permiso_id ? {
-                id: a.permiso_id,
-                tipo: a.tipo,
-                estado: a.permiso_estado,
-                motivo: a.motivo,
-                fecha_inicio: a.fecha_inicio,
-                fecha_fin: a.fecha_fin
-            } : null
-        }));
-
-        // Permisos pendientes de aprobación
-        const [pendingRequests] = await connection.execute(`
             SELECT 
                 lr.id,
                 lr.employee_id,
                 e.cedula,
-                e.nombre,
-                
+                e.nombre as empleado_nombre,
+                e.cargo,
+                e.departamento,
                 lr.request_type,
-                lr.fecha_inicio,
-                lr.fecha_fin,
-                lr.motivo,
-                lr.created_at
+                lr.start_date,
+                lr.end_date,
+                lr.reason,
+                lr.status,
+                lr.requested_at,
+                lr.approved_by,
+                u.full_name as aprobado_por_nombre,
+                lr.approved_at,
+                lr.rejection_reason,
+                DATEDIFF(lr.end_date, lr.start_date) + 1 as dias_solicitados,
+                CASE
+                    WHEN lr.start_date <= CURDATE() AND lr.end_date >= CURDATE() 
+                    THEN 'en_curso'
+                    WHEN lr.start_date > CURDATE() 
+                    THEN 'futura'
+                    ELSE 'pasada'
+                END as periodo_estado
             FROM leave_requests lr
             INNER JOIN employees e ON lr.employee_id = e.id
-            WHERE lr.estado = 'pendiente'
-                AND e.estado = 'activo'
-            ORDER BY lr.created_at DESC
-        `);
+            LEFT JOIN users u ON lr.approved_by = u.id
+            WHERE e.estado = 'activo'
+                AND lr.status IN ('pending', 'approved')
+                AND (
+                    (lr.start_date BETWEEN ? AND ?)
+                    OR (lr.end_date BETWEEN ? AND ?)
+                    OR (lr.start_date <= ? AND lr.end_date >= ?)
+                )
+            ORDER BY 
+                FIELD(lr.status, 'pending', 'approved'),
+                lr.start_date ASC
+        `, [start, end, start, end, start, end]);
+
+        // Mapear tipos de solicitud a español
+        const tipoMap = {
+            'vacation': 'Vacaciones',
+            'sick_leave': 'Licencia Médica',
+            'day_off': 'Día Libre',
+            'personal': 'Personal',
+            'other': 'Otro'
+        };
+
+        const estadoMap = {
+            'pending': 'Pendiente',
+            'approved': 'Aprobado',
+            'rejected': 'Rechazado'
+        };
+
+        const report = absences.map(a => ({
+            id: a.id,
+            empleado: {
+                id: a.employee_id,
+                cedula: a.cedula,
+                nombre: a.empleado_nombre,
+                cargo: a.cargo || '--',
+                departamento: a.departamento || '--'
+            },
+            tipo: tipoMap[a.request_type] || a.request_type,
+            tipo_codigo: a.request_type,
+            fecha_inicio: a.start_date,
+            fecha_fin: a.end_date,
+            dias_solicitados: a.dias_solicitados,
+            motivo: a.reason || '--',
+            estado: estadoMap[a.status] || a.status,
+            estado_codigo: a.status,
+            periodo_estado: a.periodo_estado,
+            solicitado_el: a.requested_at,
+            aprobado_por: a.aprobado_por_nombre || null,
+            aprobado_el: a.approved_at || null,
+            motivo_rechazo: a.rejection_reason || null
+        }));
+
+        // Estadísticas
+        const stats = {
+            total_ausencias: report.length,
+            pendientes: report.filter(r => r.estado_codigo === 'pending').length,
+            aprobadas: report.filter(r => r.estado_codigo === 'approved').length,
+            en_curso: report.filter(r => r.periodo_estado === 'en_curso').length,
+            futuras: report.filter(r => r.periodo_estado === 'futura').length,
+            total_dias_ausencia: report
+                .filter(r => r.estado_codigo === 'approved')
+                .reduce((sum, r) => sum + r.dias_solicitados, 0),
+            por_tipo: {
+                vacaciones: report.filter(r => r.tipo_codigo === 'vacation').length,
+                licencia_medica: report.filter(r => r.tipo_codigo === 'sick_leave').length,
+                dia_libre: report.filter(r => r.tipo_codigo === 'day_off').length
+            }
+        };
+
+        // Empleados con más ausencias
+        const empleadosAusencias = {};
+        report.forEach(r => {
+            const empId = r.empleado.id;
+            if (!empleadosAusencias[empId]) {
+                empleadosAusencias[empId] = {
+                    empleado: r.empleado.nombre,
+                    total_ausencias: 0,
+                    dias_totales: 0
+                };
+            }
+            empleadosAusencias[empId].total_ausencias++;
+            if (r.estado_codigo === 'approved') {
+                empleadosAusencias[empId].dias_totales += r.dias_solicitados;
+            }
+        });
+
+        const topEmpleadosAusentes = Object.values(empleadosAusencias)
+            .sort((a, b) => b.dias_totales - a.dias_totales)
+            .slice(0, 5);
 
         connection.release();
 
         res.json({
-            date: targetDate,
+            period: { start, end },
             report,
-            stats: {
-                total_ausentes: report.length,
-                con_justificacion: report.filter(r => r.tiene_justificacion).length,
-                sin_justificacion: report.filter(r => !r.tiene_justificacion).length,
-                permisos_pendientes: pendingRequests.length
-            },
-            employees: {
-                ausentes: report,
-                permisos_pendientes: pendingRequests.map(p => ({
-                    id: p.id,
-                    employee_id: p.employee_id,
-                    cedula: p.cedula,
-                    nombre: `${p.nombre}`,
-                    tipo: p.tipo,
-                    fecha_inicio: p.fecha_inicio,
-                    fecha_fin: p.fecha_fin,
-                    motivo: p.motivo,
-                    solicitado_hace: Math.floor((Date.now() - new Date(p.created_at)) / (1000 * 60 * 60 * 24))
-                }))
+            stats,
+            analysis: {
+                top_empleados_ausentes: topEmpleadosAusentes,
+                porcentaje_aprobacion: report.length > 0
+                    ? Math.round((stats.aprobadas / report.length) * 100)
+                    : 0
             }
         });
 
     } catch (error) {
-        console.error('Error en reporte de ausencias:', error.message);
-        res.status(500).json({ error: 'Error al generar reporte de ausencias' });
+        console.error('Error en reporte de ausencias activas:', error.message);
+        res.status(500).json({ error: 'Error al generar reporte de ausencias activas' });
     } finally {
         if (connection) connection.release();
     }
