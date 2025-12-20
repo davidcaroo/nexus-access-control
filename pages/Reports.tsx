@@ -419,8 +419,8 @@ const ReportsOperational: React.FC = () => {
                 setActiveReport('daily');
               }}
               className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 ${activeCategory === 'operational'
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-300 scale-105'
-                  : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-300 scale-105'
+                : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50'
                 }`}
             >
               <FileText size={18} />
@@ -432,8 +432,8 @@ const ReportsOperational: React.FC = () => {
                 setActiveReport('payroll');
               }}
               className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 ${activeCategory === 'administrative'
-                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-300 scale-105'
-                  : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-purple-400 hover:bg-purple-50'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-300 scale-105'
+                : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-purple-400 hover:bg-purple-50'
                 }`}
             >
               <TrendingUp size={18} />
