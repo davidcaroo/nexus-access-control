@@ -669,10 +669,59 @@ router.get('/monthly-consolidated', verifyToken, async (req, res) => {
             }
         }
 
-        const totalEmpleados = stats[0].total_empleados;
-        const totalEntradas = stats[0].total_entradas;
-        const totalTardanzas = stats[0].total_tardanzas;
+        const totalEmpleados = stats[0].total_empleados || 0;
+        const totalEntradas = stats[0].total_entradas || 0;
+        const totalTardanzas = stats[0].total_tardanzas || 0;
         const diasTrabajadosEsperados = diasHabiles * totalEmpleados;
+
+        console.log('📊 Consolidado Mensual - Estadísticas:', {
+            totalEmpleados,
+            totalEntradas,
+            totalTardanzas,
+            diasHabiles,
+            diasTrabajadosEsperados
+        });
+
+        // Validar que haya empleados activos
+        if (totalEmpleados === 0) {
+            console.warn('⚠️  No hay empleados activos en el sistema');
+            return res.json({
+                period: {
+                    month: targetMonth,
+                    month_name: new Date(targetYear, targetMonth - 1, 1).toLocaleString('es', { month: 'long' }),
+                    year: targetYear,
+                    start: startDate,
+                    end: endDate,
+                    dias_habiles: diasHabiles
+                },
+                kpis: {
+                    tasa_asistencia: 0,
+                    tasa_ausentismo: 0,
+                    tasa_puntualidad: 100,
+                    promedio_horas_dia: 0,
+                    total_empleados_activos: 0
+                },
+                comparacion: {
+                    total_registros_actual: 0,
+                    total_registros_anterior: 0,
+                    total_tardanzas_actual: 0,
+                    total_tardanzas_anterior: 0,
+                    diferencia_registros: 0,
+                    diferencia_tardanzas: 0,
+                    diferencia_asistencia: 0,
+                    diferencia_ausentismo: 0,
+                    diferencia_puntualidad: 0,
+                    tendencia_registros: 'igual',
+                    tendencia_tardanzas: 'igual'
+                },
+                analisis_dias: {
+                    por_dia_semana: []
+                },
+                top_ausencias: [],
+                detalle_dias: [],
+                mensaje: 'No hay empleados activos o registros de asistencia para este período'
+            });
+        }
 
         const tasaAsistencia = diasTrabajadosEsperados > 0
             ? ((totalEntradas / diasTrabajadosEsperados) * 100)
@@ -764,7 +813,55 @@ router.get('/monthly-consolidated', verifyToken, async (req, res) => {
         const diferenciaRegistros = stats[0].total_registros - (prevStats[0]?.total_registros_prev || 0);
         const diferenciaTardanzas = totalTardanzas - (prevStats[0]?.total_tardanzas_prev || 0);
 
-        connection.release();
+        // Calcular KPIs del mes anterior para comparación
+        const prevTotalEntradas = prevStats[0]?.total_entradas_prev || 0;
+        const prevTotalTardanzas = prevStats[0]?.total_tardanzas_prev || 0;
+
+        // Calcular días hábiles del mes anterior
+        let prevDiasHabiles = 0;
+        const prevStart = new Date(prevStartDate);
+        const prevEnd = new Date(prevEndDate);
+        for (let d = new Date(prevStart); d <= prevEnd; d.setDate(d.getDate() + 1)) {
+            const day = d.getDay();
+            if (day !== 0 && day !== 6) prevDiasHabiles++;
+        }
+
+        const prevDiasTrabajadosEsperados = prevDiasHabiles * totalEmpleados;
+        const prevTasaAsistencia = prevDiasTrabajadosEsperados > 0
+            ? ((prevTotalEntradas / prevDiasTrabajadosEsperados) * 100)
+            : 0;
+        const prevTasaAusentismo = 100 - prevTasaAsistencia;
+        const prevPromedioPuntualidad = prevTotalEntradas > 0
+            ? (((prevTotalEntradas - prevTotalTardanzas) / prevTotalEntradas) * 100)
+            : 100;
+
+        // Calcular diferencias de KPIs
+        const diferenciaAsistencia = tasaAsistencia - prevTasaAsistencia;
+        const diferenciaAusentismo = tasaAusentismo - prevTasaAusentismo;
+        const diferenciaPuntualidad = promedioPuntualidad - prevPromedioPuntualidad;
+
+        // Calcular promedio de horas trabajadas por día
+        const [horasTrabajadas] = await connection.execute(`
+            SELECT AVG(horas_minutos) as promedio_horas
+            FROM (
+                SELECT 
+                    ar.employee_id,
+                    ar.fecha,
+                    TIMESTAMPDIFF(MINUTE,
+                        MIN(CASE WHEN ar.contexto = 'jornada_entrada' THEN ar.hora END),
+                        MAX(CASE WHEN ar.contexto = 'jornada_salida' THEN ar.hora END)
+                    ) as horas_minutos
+                FROM attendance_records ar
+                WHERE ar.fecha BETWEEN ? AND ?
+                    AND ar.contexto IN ('jornada_entrada', 'jornada_salida')
+                GROUP BY ar.employee_id, ar.fecha
+                HAVING horas_minutos IS NOT NULL
+            ) as daily_hours
+        `, [startDate, endDate]);
+
+        const promedioHorasDia = horasTrabajadas[0]?.promedio_horas
+            ? parseFloat((horasTrabajadas[0].promedio_horas / 60).toFixed(1))
+            : 0;
 
         res.json({
             period: {
@@ -775,40 +872,58 @@ router.get('/monthly-consolidated', verifyToken, async (req, res) => {
                 end: endDate,
                 dias_habiles: diasHabiles
             },
-            stats: {
+            kpis: {
                 tasa_asistencia: parseFloat(tasaAsistencia.toFixed(1)),
                 tasa_ausentismo: parseFloat(tasaAusentismo.toFixed(1)),
-                promedio_puntualidad: parseFloat(promedioPuntualidad.toFixed(1)),
-                total_empleados: totalEmpleados,
-                total_registros: stats[0].total_registros,
-                total_entradas: totalEntradas,
-                total_tardanzas: totalTardanzas,
-                empleados_con_almuerzo: stats[0].empleados_con_almuerzo,
-                diferencia_mes_anterior: {
-                    registros: diferenciaRegistros,
-                    tardanzas: diferenciaTardanzas,
-                    tendencia_registros: diferenciaRegistros >= 0 ? 'subida' : 'bajada',
-                    tendencia_tardanzas: diferenciaTardanzas >= 0 ? 'subida' : 'bajada'
-                }
+                tasa_puntualidad: parseFloat(promedioPuntualidad.toFixed(1)),
+                promedio_horas_dia: promedioHorasDia,
+                total_empleados_activos: totalEmpleados
             },
-            analysis: {
-                por_dia_semana: weekdayAnalysis.map(wd => ({
-                    dia: wd.dia_semana,
-                    asistencias: wd.total_asistencias,
-                    tardanzas: wd.total_tardanzas,
-                    promedio_por_dia: wd.dias_contados > 0 ? Math.round(wd.total_asistencias / wd.dias_contados) : 0
-                })),
-                top_5_ausentes: topAusentes.map(emp => ({
-                    id: emp.id,
-                    nombre: emp.nombre,
-                    cargo: emp.cargo || '--',
-                    departamento: emp.departamento || '--',
-                    dias_ausente: emp.dias_ausente,
-                    dias_presente: emp.dias_presente,
-                    porcentaje_asistencia: emp.porcentaje_asistencia
-                }))
+            comparacion: {
+                total_registros_actual: stats[0].total_registros,
+                total_registros_anterior: prevStats[0]?.total_registros_prev || 0,
+                total_tardanzas_actual: totalTardanzas,
+                total_tardanzas_anterior: prevTotalTardanzas,
+                diferencia_registros: diferenciaRegistros,
+                diferencia_tardanzas: diferenciaTardanzas,
+                diferencia_asistencia: parseFloat(diferenciaAsistencia.toFixed(1)),
+                diferencia_ausentismo: parseFloat(diferenciaAusentismo.toFixed(1)),
+                diferencia_puntualidad: parseFloat(diferenciaPuntualidad.toFixed(1)),
+                tendencia_registros: diferenciaRegistros >= 0 ? 'subida' : 'bajada',
+                tendencia_tardanzas: diferenciaTardanzas >= 0 ? 'subida' : 'bajada'
             },
-            report: dailyData.map(d => ({
+            analisis_dias: {
+                por_dia_semana: weekdayAnalysis.map(wd => {
+                    const asistenciasPorDia = wd.total_asistencias;
+                    const diasContados = wd.dias_contados || 1;
+                    const tardanzasPorDia = wd.total_tardanzas;
+                    const promedioAsistencias = Math.round(asistenciasPorDia / diasContados);
+
+                    return {
+                        dia_semana: wd.dia_semana,
+                        asistencias: asistenciasPorDia,
+                        tardanzas: tardanzasPorDia,
+                        promedio_por_dia: promedioAsistencias,
+                        tasa_asistencia: totalEmpleados > 0
+                            ? parseFloat(((promedioAsistencias / totalEmpleados) * 100).toFixed(1))
+                            : 0,
+                        tasa_puntualidad: asistenciasPorDia > 0
+                            ? parseFloat((((asistenciasPorDia - tardanzasPorDia) / asistenciasPorDia) * 100).toFixed(1))
+                            : 100
+                    };
+                })
+            },
+            top_ausencias: topAusentes.map(emp => ({
+                id: emp.id,
+                nombre: emp.nombre,
+                cargo: emp.cargo || '--',
+                departamento: emp.departamento || '--',
+                total_ausencias: emp.dias_ausente,
+                dias_ausente: emp.dias_ausente,
+                dias_presente: emp.dias_presente,
+                porcentaje_asistencia: emp.porcentaje_asistencia
+            })),
+            detalle_dias: dailyData.map(d => ({
                 fecha: d.fecha,
                 dia_semana: d.dia_semana,
                 empleados_presentes: d.empleados_presentes || 0,
