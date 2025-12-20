@@ -6,6 +6,54 @@ import { io } from '../server.js';
 
 const router = express.Router();
 
+/**
+ * Función helper: Detectar contexto automáticamente basado en horarios del empleado
+ * @param {Object} employee - Datos del empleado
+ * @param {string} recordType - 'entrada' o 'salida'
+ * @param {string} hora - Hora actual en formato HH:MM:SS
+ * @param {number} recordCount - Cantidad de registros del día
+ * @returns {string} - Contexto detectado
+ */
+function detectarContexto(employee, recordType, hora, recordCount) {
+    // Si no tiene horario de almuerzo configurado, usar lógica simple
+    if (!employee.horario_almuerzo_inicio || !employee.horario_almuerzo_fin) {
+        if (recordType === 'entrada') {
+            return recordCount === 0 ? 'jornada_entrada' : 'almuerzo_entrada';
+        } else {
+            return 'jornada_salida';
+        }
+    }
+
+    // Convertir horas a minutos para comparación más fácil
+    const horaActualMinutos = parseInt(hora.split(':')[0]) * 60 + parseInt(hora.split(':')[1]);
+    const almuerzoinicioMinutos = parseInt(employee.horario_almuerzo_inicio.split(':')[0]) * 60 +
+        parseInt(employee.horario_almuerzo_inicio.split(':')[1]);
+    const almuerzoFinMinutos = parseInt(employee.horario_almuerzo_fin.split(':')[0]) * 60 +
+        parseInt(employee.horario_almuerzo_fin.split(':')[1]);
+
+    const toleranciaMinutos = 30; // ±30 minutos de tolerancia
+
+    if (recordType === 'entrada') {
+        // Primera entrada del día
+        if (recordCount === 0) {
+            return 'jornada_entrada';
+        }
+        // Entrada cercana al fin del almuerzo = regreso de almuerzo
+        if (Math.abs(horaActualMinutos - almuerzoFinMinutos) <= toleranciaMinutos) {
+            return 'almuerzo_entrada';
+        }
+        // Otra entrada
+        return 'almuerzo_entrada';
+    } else {
+        // Salida cercana al inicio del almuerzo = salida a almorzar
+        if (Math.abs(horaActualMinutos - almuerzoinicioMinutos) <= toleranciaMinutos) {
+            return 'almuerzo_salida';
+        }
+        // Salida definitiva (fin de jornada)
+        return 'jornada_salida';
+    }
+}
+
 // GET /api/attendance - Obtener registros de asistencia
 router.get('/', verifyToken, async (req, res) => {
     try {
@@ -41,10 +89,25 @@ router.post('/record', verifyToken, async (req, res) => {
 
         if (employees.length === 0) {
             connection.release();
-            return res.status(404).json({ error: 'Employee not found', success: false });
+            return res.status(404).json({
+                error: 'Employee not found',
+                success: false,
+                message: 'Empleado no encontrado en el sistema'
+            });
         }
 
         const employee = employees[0];
+
+        // 🔒 VALIDACIÓN: Verificar que el empleado esté ACTIVO
+        if (employee.estado !== 'activo') {
+            connection.release();
+            return res.status(403).json({
+                error: 'Employee inactive',
+                success: false,
+                message: `${employee.nombre} está inactivo. No puede registrar asistencia. Contacte a RR.HH.`
+            });
+        }
+
         const now = new Date();
         const fecha = now.toISOString().split('T')[0];
         const hora = now.toTimeString().split(' ')[0];
@@ -110,25 +173,36 @@ router.post('/record', verifyToken, async (req, res) => {
         }
 
 
-        // Determinar si es tardanza (solo para entradas)
+        // Determinar contexto automáticamente
+        const contexto = detectarContexto(employee, recordType, hora, todayRecords.length);
+
+        // Determinar si es tardanza (solo para entradas de jornada)
         let tardanza = false;
-        if (recordType === 'entrada') {
+        if (recordType === 'entrada' && contexto === 'jornada_entrada') {
             const [horaStr] = hora.split(':');
             const [horaEntradaStr] = employee.horario_entrada.split(':');
             const horaEntradaNum = parseInt(horaEntradaStr);
             const horaActualNum = parseInt(horaStr);
 
-            // Tardanza si llega después de la hora + 15 min de tolerancia
+            // Obtener tolerancia desde settings
+            const [toleranceSettings] = await connection.execute(
+                'SELECT value FROM settings WHERE `key` = ?',
+                ['attendance_tolerance_minutes']
+            );
+            const toleranceMinutes = toleranceSettings.length > 0 ?
+                parseInt(toleranceSettings[0].value) : 15;
+
+            // Tardanza si llega después de la hora + tolerancia
             if (horaActualNum * 60 + parseInt(hora.split(':')[1]) >
-                horaEntradaNum * 60 + 15) {
+                horaEntradaNum * 60 + toleranceMinutes) {
                 tardanza = true;
             }
         }
 
-        // Registrar asistencia
+        // Registrar asistencia con contexto
         await connection.execute(
-            'INSERT INTO attendance_records (employee_id, tipo, fecha, hora, metodo, tardanza) VALUES (?, ?, ?, ?, ?, ?)',
-            [employee.id, recordType, fecha, hora, metodo, tardanza]
+            'INSERT INTO attendance_records (employee_id, tipo, fecha, hora, metodo, tardanza, contexto) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [employee.id, recordType, fecha, hora, metodo, tardanza, contexto]
         );
 
         connection.release();
@@ -138,6 +212,7 @@ router.post('/record', verifyToken, async (req, res) => {
             employee_id: employee.id,
             employee_name: employee.nombre,
             tipo: recordType,
+            contexto: contexto,
             fecha,
             hora,
             metodo,
@@ -145,10 +220,30 @@ router.post('/record', verifyToken, async (req, res) => {
             timestamp: new Date()
         });
 
+        // Mensaje descriptivo según el contexto
+        let mensaje = '';
+        switch (contexto) {
+            case 'jornada_entrada':
+                mensaje = `Entrada de jornada registrada`;
+                break;
+            case 'almuerzo_salida':
+                mensaje = `Salida a almuerzo registrada`;
+                break;
+            case 'almuerzo_entrada':
+                mensaje = `Regreso de almuerzo registrado`;
+                break;
+            case 'jornada_salida':
+                mensaje = `Salida de jornada registrada`;
+                break;
+            default:
+                mensaje = `${recordType === 'entrada' ? 'Entrada' : 'Salida'} registrada`;
+        }
+
         res.status(201).json({
             success: true,
-            message: `${employee.nombre} - ${recordType === 'entrada' ? 'Entrada registrada' : 'Salida registrada'}${tardanza ? ' (Tardanza)' : ''}`,
-            employee
+            message: `${employee.nombre} - ${mensaje}${tardanza ? ' (Tardanza)' : ''}`,
+            employee,
+            contexto
         });
     } catch (error) {
         console.error('Error recording attendance:', error);

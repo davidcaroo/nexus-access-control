@@ -70,6 +70,8 @@ router.post('/', verifyToken, verifyAdminOrHR, async (req, res) => {
             departamento,
             horario_entrada,
             horario_salida,
+            horario_almuerzo_inicio,
+            horario_almuerzo_fin,
             estado,
             fecha_ingreso
         } = req.body;
@@ -84,8 +86,8 @@ router.post('/', verifyToken, verifyAdminOrHR, async (req, res) => {
 
         await connection.execute(
             `INSERT INTO employees 
-       (id, cedula, nombre, foto, cargo, departamento, horario_entrada, horario_salida, estado, fecha_ingreso, qr_code_url) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, cedula, nombre, foto, cargo, departamento, horario_entrada, horario_salida, horario_almuerzo_inicio, horario_almuerzo_fin, estado, fecha_ingreso, qr_code_url) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 id,
                 cedula,
@@ -95,6 +97,8 @@ router.post('/', verifyToken, verifyAdminOrHR, async (req, res) => {
                 departamento || null,
                 horario_entrada || '09:00:00',
                 horario_salida || '18:00:00',
+                horario_almuerzo_inicio || null,
+                horario_almuerzo_fin || null,
                 estado || 'activo',
                 fecha_ingreso || new Date().toISOString().split('T')[0],
                 qr_code_url
@@ -282,8 +286,19 @@ router.patch('/:id', verifyToken, verifyAdminOrHR, async (req, res) => {
             departamento,
             horario_entrada,
             horario_salida,
+            horario_almuerzo_inicio,
+            horario_almuerzo_fin,
             estado
         } = req.body;
+
+        // Log para debugging
+        console.log('📝 Actualizando empleado:', id);
+        console.log('🍽️ Horarios de almuerzo recibidos:', {
+            inicio: horario_almuerzo_inicio,
+            fin: horario_almuerzo_fin,
+            tipo_inicio: typeof horario_almuerzo_inicio,
+            tipo_fin: typeof horario_almuerzo_fin
+        });
 
         connection = await pool.getConnection();
 
@@ -332,6 +347,16 @@ router.patch('/:id', verifyToken, verifyAdminOrHR, async (req, res) => {
         if (horario_salida !== undefined) {
             updateFields.push('horario_salida = ?');
             updateValues.push(horario_salida);
+        }
+        if (horario_almuerzo_inicio !== undefined) {
+            updateFields.push('horario_almuerzo_inicio = ?');
+            // Convertir strings vacíos a null
+            updateValues.push(horario_almuerzo_inicio === '' ? null : horario_almuerzo_inicio);
+        }
+        if (horario_almuerzo_fin !== undefined) {
+            updateFields.push('horario_almuerzo_fin = ?');
+            // Convertir strings vacíos a null
+            updateValues.push(horario_almuerzo_fin === '' ? null : horario_almuerzo_fin);
         }
         if (estado !== undefined) {
             updateFields.push('estado = ?');

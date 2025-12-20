@@ -44,7 +44,23 @@ const Dashboard: React.FC = () => {
 
     const totalEmployees = employees.length;
     const absentCount = totalEmployees - presentCount; // Ausentes = Total - Vinieron hoy
-    const lates = todaysRecords.filter(r => r.tardanza && r.tipo === 'entrada').length;
+
+    // RECALCULAR tardanzas en tiempo real basándose en horario_entrada + 15 min tolerancia
+    const lates = todaysRecords.filter(r => {
+      if (r.tipo !== 'entrada') return false;
+
+      const employee = employees.find(emp => emp.id === r.employee_id);
+      if (!employee || !employee.horario_entrada) return false;
+
+      const [horaStr, minStr] = r.hora.split(':');
+      const [horaEntradaStr, minEntradaStr] = employee.horario_entrada.split(':');
+
+      const minutosEntrada = parseInt(horaEntradaStr) * 60 + parseInt(minEntradaStr || '0');
+      const minutosActual = parseInt(horaStr) * 60 + parseInt(minStr || '0');
+
+      // Es tardanza si llega después de horario_entrada + 15 min de tolerancia
+      return minutosActual > (minutosEntrada + 15);
+    }).length;
 
     console.log("Dashboard Stats: Today's date:", today);
     console.log("Dashboard Stats: Today's records:", todaysRecords);

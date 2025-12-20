@@ -56,6 +56,8 @@ CREATE TABLE
         departamento VARCHAR(150),
         horario_entrada TIME NOT NULL DEFAULT '09:00:00',
         horario_salida TIME NOT NULL DEFAULT '18:00:00',
+        horario_almuerzo_inicio TIME NULL DEFAULT NULL,
+        horario_almuerzo_fin TIME NULL DEFAULT NULL,
         estado ENUM ('activo', 'inactivo') NOT NULL DEFAULT 'activo',
         fecha_ingreso DATE NOT NULL,
         qr_code_url VARCHAR(512),
@@ -74,10 +76,18 @@ CREATE TABLE
         hora TIME NOT NULL,
         metodo ENUM ('qr', 'manual', 'facial') DEFAULT 'manual',
         tardanza BOOLEAN DEFAULT FALSE,
+        contexto ENUM (
+            'jornada_entrada',
+            'almuerzo_salida',
+            'almuerzo_entrada',
+            'jornada_salida',
+            'otro'
+        ) NULL DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (employee_id) REFERENCES employees (id) ON DELETE CASCADE,
         INDEX idx_employee (employee_id),
-        INDEX idx_fecha (fecha)
+        INDEX idx_fecha (fecha),
+        INDEX idx_contexto (contexto)
     ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 CREATE TABLE
@@ -208,6 +218,31 @@ VALUES
         'permissions:manage',
         'Gestionar permisos',
         NOW ()
+    ),
+    ('rep1', 'reports:view', 'Ver reportes', NOW ()),
+    (
+        'rep2',
+        'reports:create',
+        'Crear reportes personalizados',
+        NOW ()
+    ),
+    (
+        'rep3',
+        'reports:export',
+        'Exportar reportes',
+        NOW ()
+    ),
+    (
+        'rep4',
+        'reports:delete',
+        'Eliminar reportes',
+        NOW ()
+    ),
+    (
+        'rep5',
+        'reports:advanced',
+        'Acceso a reportes avanzados',
+        NOW ()
     );
 
 INSERT INTO
@@ -218,6 +253,7 @@ SELECT
 FROM
     permissions;
 
+-- Role 2: admin - Todos los permisos excepto gestión de roles y permisos
 INSERT INTO
     role_permissions
 SELECT
@@ -228,6 +264,7 @@ FROM
 WHERE
     action NOT IN ('roles:manage', 'permissions:manage');
 
+-- Role 3: hr_manager - Gestión de empleados, ausencias y reportes administrativos/estratégicos
 INSERT INTO
     role_permissions
 SELECT
@@ -237,8 +274,16 @@ FROM
     permissions
 WHERE
     action LIKE 'employees:%'
-    OR action LIKE 'leave_requests:%';
+    OR action LIKE 'leave_requests:%'
+    OR action LIKE 'attendance:%'
+    OR action IN (
+        'reports:view',
+        'reports:create',
+        'reports:export',
+        'reports:advanced'
+    );
 
+-- Role 4: department_head - Lectura de empleados, asistencia, aprobación de ausencias y reportes operativos
 INSERT INTO
     role_permissions
 SELECT
@@ -251,9 +296,12 @@ WHERE
         'employees:read',
         'attendance:view',
         'leave_requests:view',
-        'leave_requests:approve'
+        'leave_requests:approve',
+        'reports:view',
+        'reports:export'
     );
 
+-- Role 5: employee - Solo crear ausencias y registrar asistencia
 INSERT INTO
     role_permissions
 SELECT

@@ -91,6 +91,15 @@ const EmployeeManager: React.FC = () => {
 
     try {
       const dataToSave = { ...formData };
+
+      // Convertir strings vacíos a null para campos opcionales de tiempo
+      if (dataToSave.horario_almuerzo_inicio === '') {
+        dataToSave.horario_almuerzo_inicio = null;
+      }
+      if (dataToSave.horario_almuerzo_fin === '') {
+        dataToSave.horario_almuerzo_fin = null;
+      }
+
       // Siempre generar el QR si la cédula está presente, asegurando que esté actualizado
       if (dataToSave.cedula) {
         dataToSave.qr_code_url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(dataToSave.cedula)}`;
@@ -450,6 +459,20 @@ const EmployeeManager: React.FC = () => {
                 <Input label="Departamento" value={formData.departamento || ''} onChange={e => setFormData({ ...formData, departamento: e.target.value })} />
                 <Input label="Hora Entrada" type="time" value={formData.horario_entrada || '09:00'} onChange={e => setFormData({ ...formData, horario_entrada: e.target.value })} />
                 <Input label="Hora Salida" type="time" value={formData.horario_salida || '18:00'} onChange={e => setFormData({ ...formData, horario_salida: e.target.value })} />
+                <Input
+                  label="Inicio Almuerzo (Opcional)"
+                  type="time"
+                  value={formData.horario_almuerzo_inicio || ''}
+                  onChange={e => setFormData({ ...formData, horario_almuerzo_inicio: e.target.value })}
+                  placeholder="Ej: 12:00"
+                />
+                <Input
+                  label="Fin Almuerzo (Opcional)"
+                  type="time"
+                  value={formData.horario_almuerzo_fin || ''}
+                  onChange={e => setFormData({ ...formData, horario_almuerzo_fin: e.target.value })}
+                  placeholder="Ej: 13:00"
+                />
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Estado</label><select className="w-full px-3 py-2 border border-gray-300 rounded-lg" value={formData.estado} onChange={e => setFormData({ ...formData, estado: e.target.value as any })}><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></div>
               </div>
             </div>

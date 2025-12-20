@@ -24,6 +24,8 @@ export interface Employee {
   departamento: string;
   horario_entrada: string;
   horario_salida:string;
+  horario_almuerzo_inicio?: string | null;
+  horario_almuerzo_fin?: string | null;
   estado: 'activo' | 'inactivo';
   fecha_ingreso: string;
   qr_code_url?: string;
@@ -37,6 +39,7 @@ export interface AttendanceRecord {
   hora: string; // HH:mm:ss
   metodo: 'qr' | 'manual' | 'facial';
   tardanza: boolean;
+  contexto?: 'jornada_entrada' | 'almuerzo_salida' | 'almuerzo_entrada' | 'jornada_salida' | 'otro' | null;
 }
 
 export interface LeaveRequest {
