@@ -454,7 +454,11 @@ router.get('/operational/active-absences', verifyToken, async (req, res) => {
 
 // ============ NIVEL 2: REPORTES ADMINISTRATIVOS ============
 
-// 4. Reporte Quincenal de Nómina (CRÍTICO)
+/**
+ * REPORTE 4: Nómina Quincenal
+ * Detalle de días trabajados, tardanzas y ausencias para procesamiento de nómina
+ * Base para cálculo de pagos quincenales
+ */
 router.get('/payroll', verifyToken, async (req, res) => {
     let connection = null;
     try {
@@ -476,83 +480,94 @@ router.get('/payroll', verifyToken, async (req, res) => {
             if (day !== 0 && day !== 6) diasHabiles++;
         }
 
+        // Query principal con datos de asistencia y ausencias
         const [results] = await connection.execute(`
             SELECT 
                 e.id,
                 e.cedula,
                 e.nombre,
-                
                 e.cargo,
                 e.departamento,
                 e.horario_entrada,
                 e.horario_salida,
-                COUNT(DISTINCT ar.fecha) as dias_trabajados,
+                e.horario_almuerzo_inicio,
+                e.horario_almuerzo_fin,
+                -- Días únicos trabajados
+                COUNT(DISTINCT CASE WHEN ar.contexto = 'jornada_entrada' THEN ar.fecha END) as dias_trabajados,
+                -- Tardanzas
+                SUM(CASE WHEN ar.tardanza = 1 THEN 1 ELSE 0 END) as total_tardanzas,
                 SUM(
                     CASE 
-                        WHEN ar.tipo = 'entrada' AND e.horario_entrada IS NOT NULL 
-                        AND ar.hora > ADDTIME(e.horario_entrada, '00:15:00')
-                        THEN 1
-                        ELSE 0
-                    END
-                ) as total_tardanzas,
-                SUM(
-                    CASE 
-                        WHEN ar.tipo = 'entrada' AND e.horario_entrada IS NOT NULL 
-                        AND ar.hora > ADDTIME(e.horario_entrada, '00:15:00')
+                        WHEN ar.tardanza = 1 AND ar.contexto = 'jornada_entrada' AND e.horario_entrada IS NOT NULL
                         THEN TIMESTAMPDIFF(MINUTE, 
                             CONCAT(ar.fecha, ' ', e.horario_entrada),
                             CONCAT(ar.fecha, ' ', ar.hora)
-                        )
+                        ) - 15
                         ELSE 0
                     END
                 ) as minutos_tardanza_total,
-                COUNT(DISTINCT CASE WHEN lr.estado = 'aprobado' THEN lr.id END) as ausencias_justificadas
+                -- Ausencias justificadas (leave_requests aprobados)
+                COUNT(DISTINCT lr.id) as ausencias_justificadas,
+                SUM(CASE WHEN lr.status = 'approved' THEN DATEDIFF(lr.end_date, lr.start_date) + 1 ELSE 0 END) as dias_ausencias_justificadas
             FROM employees e
             LEFT JOIN attendance_records ar ON e.id = ar.employee_id 
                 AND ar.fecha BETWEEN ? AND ?
             LEFT JOIN leave_requests lr ON e.id = lr.employee_id
-                AND DATE(lr.fecha_inicio) BETWEEN ? AND ?
-                AND lr.estado = 'aprobado'
+                AND lr.status = 'approved'
+                AND lr.start_date BETWEEN ? AND ?
             WHERE e.estado = 'activo'
-            GROUP BY e.id, e.cedula, e.nombre,  e.cargo, e.departamento, 
-                     e.horario_entrada, e.horario_salida
+            GROUP BY e.id, e.cedula, e.nombre, e.cargo, e.departamento, 
+                     e.horario_entrada, e.horario_salida, e.horario_almuerzo_inicio, e.horario_almuerzo_fin
             ORDER BY e.departamento, e.nombre
         `, [startDate, endDate, startDate, endDate]);
 
         const report = results.map(r => {
             const diasTrabajados = r.dias_trabajados || 0;
-            const ausenciasInjustificadas = Math.max(0, diasHabiles - diasTrabajados - (r.ausencias_justificadas || 0));
+            const diasAusenciasJustificadas = r.dias_ausencias_justificadas || 0;
+            const ausenciasInjustificadas = Math.max(0, diasHabiles - diasTrabajados - diasAusenciasJustificadas);
 
-            // Calcular horas trabajadas (asumiendo jornada estándar de 8 horas)
-            const horasTrabajadas = diasTrabajados * 8;
+            // Calcular horas trabajadas netas (8 horas - 1 hora almuerzo = 7 horas netas por día)
+            const horasNetasPorDia = 7;
+            const horasTrabajadas = diasTrabajados * horasNetasPorDia;
 
-            // Horas extras (si trabajó más días de lo esperado o más de 8 horas)
-            const horasExtras = 0; // TODO: Implementar cálculo real basado en horas exactas
+            // Calcular descuentos por tardanzas (ejemplo: cada 3 tardanzas = 1 hora descontada)
+            const horasDescuentoPorTardanzas = Math.floor((r.total_tardanzas || 0) / 3) * 1;
+
+            // Descuentos por ausencias injustificadas (día completo)
+            const horasDescuentoAusencias = ausenciasInjustificadas * 8;
+
+            const horasNetasAPagar = Math.max(0, horasTrabajadas - horasDescuentoPorTardanzas - horasDescuentoAusencias);
 
             let observaciones = [];
             if (r.total_tardanzas > 0) {
-                observaciones.push(`${r.total_tardanzas} tardanzas (${r.minutos_tardanza_total} min total)`);
+                observaciones.push(`${r.total_tardanzas} tardanzas (${r.minutos_tardanza_total} min)`);
             }
             if (ausenciasInjustificadas > 0) {
-                observaciones.push(`${ausenciasInjustificadas} ausencias sin justificar`);
+                observaciones.push(`${ausenciasInjustificadas} días sin justificar`);
+            }
+            if (r.ausencias_justificadas > 0) {
+                observaciones.push(`${r.ausencias_justificadas} permisos aprobados (${diasAusenciasJustificadas} días)`);
             }
 
             return {
                 id: r.id,
                 cedula: r.cedula,
-                nombre: `${r.nombre}`,
-                cargo: r.cargo,
-                departamento: r.departamento,
-                dias_trabajados: diasTrabajados,
+                nombre: r.nombre,
+                cargo: r.cargo || '--',
+                departamento: r.departamento || '--',
                 dias_habiles: diasHabiles,
+                dias_trabajados: diasTrabajados,
+                dias_ausencias_justificadas: diasAusenciasJustificadas,
+                dias_ausencias_injustificadas: ausenciasInjustificadas,
                 porcentaje_asistencia: Math.round((diasTrabajados / diasHabiles) * 100),
-                horas_trabajadas: horasTrabajadas,
-                horas_extras: horasExtras,
+                horas_trabajadas_brutas: diasTrabajados * 8,
+                horas_trabajadas_netas: horasTrabajadas,
+                horas_netas_a_pagar: horasNetasAPagar,
                 tardanzas_cantidad: r.total_tardanzas || 0,
                 tardanzas_minutos: r.minutos_tardanza_total || 0,
-                ausencias_justificadas: r.ausencias_justificadas || 0,
-                ausencias_injustificadas: ausenciasInjustificadas,
-                observaciones: observaciones.join('; ') || 'Sin observaciones'
+                horas_descuento_tardanzas: horasDescuentoPorTardanzas,
+                horas_descuento_ausencias: horasDescuentoAusencias,
+                observaciones: observaciones.join(' | ') || '--'
             };
         });
 
@@ -562,26 +577,39 @@ router.get('/payroll', verifyToken, async (req, res) => {
             const empleadosDept = report.filter(r => r.departamento === dept);
             return {
                 departamento: dept,
-                empleados: empleadosDept.length,
+                total_empleados: empleadosDept.length,
                 total_dias_trabajados: empleadosDept.reduce((sum, e) => sum + e.dias_trabajados, 0),
-                total_horas_trabajadas: empleadosDept.reduce((sum, e) => sum + e.horas_trabajadas, 0),
-                total_horas_extras: empleadosDept.reduce((sum, e) => sum + e.horas_extras, 0),
-                total_tardanzas: empleadosDept.reduce((sum, e) => sum + e.tardanzas_cantidad, 0)
+                total_horas_netas: empleadosDept.reduce((sum, e) => sum + e.horas_netas_a_pagar, 0),
+                total_tardanzas: empleadosDept.reduce((sum, e) => sum + e.tardanzas_cantidad, 0),
+                total_ausencias_injustificadas: empleadosDept.reduce((sum, e) => sum + e.dias_ausencias_injustificadas, 0),
+                promedio_asistencia: Math.round(
+                    empleadosDept.reduce((sum, e) => sum + e.porcentaje_asistencia, 0) / empleadosDept.length
+                )
             };
         });
 
         connection.release();
 
         res.json({
-            period: { start: startDate, end: endDate, dias_habiles: diasHabiles },
+            period: {
+                start: startDate,
+                end: endDate,
+                dias_habiles: diasHabiles,
+                tipo_periodo: 'quincenal'
+            },
             report,
             stats: {
-                empleados: report.length,
-                dias_trabajados: report.reduce((sum, e) => sum + e.dias_trabajados, 0),
-                horas_trabajadas: report.reduce((sum, e) => sum + e.horas_trabajadas, 0),
-                horas_extras: report.reduce((sum, e) => sum + e.horas_extras, 0),
-                subtotales
-            }
+                total_empleados: report.length,
+                total_dias_habiles: diasHabiles * report.length,
+                total_dias_trabajados: report.reduce((sum, e) => sum + e.dias_trabajados, 0),
+                total_horas_netas_a_pagar: report.reduce((sum, e) => sum + e.horas_netas_a_pagar, 0),
+                total_tardanzas: report.reduce((sum, e) => sum + e.tardanzas_cantidad, 0),
+                total_ausencias_injustificadas: report.reduce((sum, e) => sum + e.dias_ausencias_injustificadas, 0),
+                promedio_asistencia_global: Math.round(
+                    report.reduce((sum, e) => sum + e.porcentaje_asistencia, 0) / report.length
+                )
+            },
+            subtotales
         });
 
     } catch (error) {
@@ -592,7 +620,11 @@ router.get('/payroll', verifyToken, async (req, res) => {
     }
 });
 
-// 5. Reporte Mensual Consolidado
+/**
+ * REPORTE 5: Consolidado Mensual
+ * Dashboard ejecutivo con KPIs del mes completo
+ * Análisis de tendencias, comparativas y alertas
+ */
 router.get('/monthly-consolidated', verifyToken, async (req, res) => {
     let connection = null;
     try {
@@ -606,34 +638,35 @@ router.get('/monthly-consolidated', verifyToken, async (req, res) => {
 
         connection = await pool.getConnection();
 
-        // Métricas generales
+        // 1. Métricas generales del mes
         const [stats] = await connection.execute(`
             SELECT 
                 COUNT(DISTINCT e.id) as total_empleados,
                 COUNT(DISTINCT ar.fecha) as total_dias_con_registro,
                 COUNT(DISTINCT ar.id) as total_registros,
-                SUM(CASE WHEN ar.tipo = 'entrada' THEN 1 ELSE 0 END) as total_entradas,
-                SUM(
-                    CASE 
-                        WHEN ar.tipo = 'entrada' AND e.horario_entrada IS NOT NULL 
-                        AND ar.hora > ADDTIME(e.horario_entrada, '00:15:00')
-                        THEN 1
-                        ELSE 0
-                    END
-                ) as total_tardanzas
+                SUM(CASE WHEN ar.contexto = 'jornada_entrada' THEN 1 ELSE 0 END) as total_entradas,
+                SUM(CASE WHEN ar.tardanza = 1 THEN 1 ELSE 0 END) as total_tardanzas,
+                COUNT(DISTINCT CASE WHEN ar.contexto IN ('almuerzo_salida', 'almuerzo_entrada') THEN ar.employee_id END) as empleados_con_almuerzo
             FROM employees e
             LEFT JOIN attendance_records ar ON e.id = ar.employee_id 
                 AND ar.fecha BETWEEN ? AND ?
             WHERE e.estado = 'activo'
         `, [startDate, endDate]);
 
-        // Calcular días hábiles del mes
+        // 2. Calcular días hábiles del mes
         const start = new Date(startDate);
         const end = new Date(endDate);
         let diasHabiles = 0;
+        const diasPorSemana = { lunes: 0, martes: 0, miercoles: 0, jueves: 0, viernes: 0 };
+
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             const day = d.getDay();
-            if (day !== 0 && day !== 6) diasHabiles++;
+            if (day !== 0 && day !== 6) {
+                diasHabiles++;
+                const dayNames = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+                const dayName = dayNames[day];
+                if (diasPorSemana[dayName] !== undefined) diasPorSemana[dayName]++;
+            }
         }
 
         const totalEmpleados = stats[0].total_empleados;
@@ -642,35 +675,77 @@ router.get('/monthly-consolidated', verifyToken, async (req, res) => {
         const diasTrabajadosEsperados = diasHabiles * totalEmpleados;
 
         const tasaAsistencia = diasTrabajadosEsperados > 0
-            ? ((totalEntradas / diasTrabajadosEsperados) * 100).toFixed(1)
+            ? ((totalEntradas / diasTrabajadosEsperados) * 100)
             : 0;
-        const tasaAusentismo = (100 - tasaAsistencia).toFixed(1);
+        const tasaAusentismo = 100 - tasaAsistencia;
         const promedioPuntualidad = totalEntradas > 0
-            ? (((totalEntradas - totalTardanzas) / totalEntradas) * 100).toFixed(1)
+            ? (((totalEntradas - totalTardanzas) / totalEntradas) * 100)
             : 100;
 
-        // Datos diarios para calendario
+        // 3. Datos diarios para calendario/gráfica
         const [dailyData] = await connection.execute(`
             SELECT 
-                ar.fecha as fecha,
-                COUNT(DISTINCT e.id) as empleados_presentes,
-                SUM(
-                    CASE 
-                        WHEN ar.tipo = 'entrada' AND e.horario_entrada IS NOT NULL 
-                        AND ar.hora > ADDTIME(e.horario_entrada, '00:15:00')
-                        THEN 1
-                        ELSE 0
-                    END
-                ) as tardanzas
+                ar.fecha,
+                DAYNAME(ar.fecha) as dia_semana,
+                COUNT(DISTINCT CASE WHEN ar.contexto = 'jornada_entrada' THEN e.id END) as empleados_presentes,
+                COUNT(DISTINCT e.id) as total_empleados_activos,
+                SUM(CASE WHEN ar.tardanza = 1 THEN 1 ELSE 0 END) as tardanzas,
+                ROUND(
+                    (COUNT(DISTINCT CASE WHEN ar.contexto = 'jornada_entrada' THEN e.id END) * 100.0) / 
+                    COUNT(DISTINCT e.id), 
+                    1
+                ) as porcentaje_asistencia_dia
             FROM employees e
-            LEFT JOIN attendance_records ar ON e.id = ar.employee_id 
-                AND ar.fecha BETWEEN ? AND ?
+            CROSS JOIN (
+                SELECT DISTINCT fecha FROM attendance_records WHERE fecha BETWEEN ? AND ?
+            ) dates
+            LEFT JOIN attendance_records ar ON e.id = ar.employee_id AND ar.fecha = dates.fecha
             WHERE e.estado = 'activo'
-            GROUP BY ar.fecha
-            ORDER BY fecha
+            GROUP BY ar.fecha, dates.fecha
+            ORDER BY dates.fecha
         `, [startDate, endDate]);
 
-        // Comparativa mes anterior
+        // 4. Análisis por día de la semana
+        const [weekdayAnalysis] = await connection.execute(`
+            SELECT 
+                DAYNAME(ar.fecha) as dia_semana,
+                COUNT(DISTINCT CASE WHEN ar.contexto = 'jornada_entrada' THEN ar.employee_id END) as total_asistencias,
+                SUM(CASE WHEN ar.tardanza = 1 THEN 1 ELSE 0 END) as total_tardanzas,
+                COUNT(DISTINCT ar.fecha) as dias_contados
+            FROM attendance_records ar
+            WHERE ar.fecha BETWEEN ? AND ?
+            GROUP BY DAYNAME(ar.fecha)
+            ORDER BY FIELD(DAYNAME(ar.fecha), 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')
+        `, [startDate, endDate]);
+
+        // 5. Top 5 empleados con más ausencias
+        const [topAusentes] = await connection.execute(`
+            SELECT 
+                e.id,
+                e.nombre,
+                e.cargo,
+                e.departamento,
+                COUNT(DISTINCT dates.fecha) - COUNT(DISTINCT ar.fecha) as dias_ausente,
+                COUNT(DISTINCT ar.fecha) as dias_presente,
+                ROUND(
+                    (COUNT(DISTINCT ar.fecha) * 100.0) / COUNT(DISTINCT dates.fecha),
+                    1
+                ) as porcentaje_asistencia
+            FROM employees e
+            CROSS JOIN (
+                SELECT DISTINCT fecha FROM attendance_records WHERE fecha BETWEEN ? AND ?
+            ) dates
+            LEFT JOIN attendance_records ar ON e.id = ar.employee_id 
+                AND ar.fecha = dates.fecha 
+                AND ar.contexto = 'jornada_entrada'
+            WHERE e.estado = 'activo'
+            GROUP BY e.id, e.nombre, e.cargo, e.departamento
+            HAVING dias_ausente > 0
+            ORDER BY dias_ausente DESC
+            LIMIT 5
+        `, [startDate, endDate]);
+
+        // 6. Comparativa con mes anterior
         const prevMonth = targetMonth === 1 ? 12 : targetMonth - 1;
         const prevYear = targetMonth === 1 ? targetYear - 1 : targetYear;
         const prevStartDate = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
@@ -679,33 +754,68 @@ router.get('/monthly-consolidated', verifyToken, async (req, res) => {
 
         const [prevStats] = await connection.execute(`
             SELECT 
-                COUNT(DISTINCT ar.id) as total_registros_prev
+                COUNT(DISTINCT ar.id) as total_registros_prev,
+                SUM(CASE WHEN ar.contexto = 'jornada_entrada' THEN 1 ELSE 0 END) as total_entradas_prev,
+                SUM(CASE WHEN ar.tardanza = 1 THEN 1 ELSE 0 END) as total_tardanzas_prev
             FROM attendance_records ar
             WHERE ar.fecha BETWEEN ? AND ?
         `, [prevStartDate, prevEndDate]);
+
+        const diferenciaRegistros = stats[0].total_registros - (prevStats[0]?.total_registros_prev || 0);
+        const diferenciaTardanzas = totalTardanzas - (prevStats[0]?.total_tardanzas_prev || 0);
 
         connection.release();
 
         res.json({
             period: {
                 month: targetMonth,
+                month_name: new Date(targetYear, targetMonth - 1, 1).toLocaleString('es', { month: 'long' }),
                 year: targetYear,
                 start: startDate,
                 end: endDate,
                 dias_habiles: diasHabiles
             },
             stats: {
-                tasa_asistencia: parseFloat(tasaAsistencia),
-                tasa_ausentismo: parseFloat(tasaAusentismo),
-                promedio_puntualidad: parseFloat(promedioPuntualidad),
+                tasa_asistencia: parseFloat(tasaAsistencia.toFixed(1)),
+                tasa_ausentismo: parseFloat(tasaAusentismo.toFixed(1)),
+                promedio_puntualidad: parseFloat(promedioPuntualidad.toFixed(1)),
                 total_empleados: totalEmpleados,
+                total_registros: stats[0].total_registros,
+                total_entradas: totalEntradas,
                 total_tardanzas: totalTardanzas,
-                horas_extras_totales: 0,
-                registros_actuales: stats[0].total_registros,
-                registros_anteriores: prevStats[0].total_registros_prev,
-                diferencia_mes_anterior: stats[0].total_registros - prevStats[0].total_registros_prev
+                empleados_con_almuerzo: stats[0].empleados_con_almuerzo,
+                diferencia_mes_anterior: {
+                    registros: diferenciaRegistros,
+                    tardanzas: diferenciaTardanzas,
+                    tendencia_registros: diferenciaRegistros >= 0 ? 'subida' : 'bajada',
+                    tendencia_tardanzas: diferenciaTardanzas >= 0 ? 'subida' : 'bajada'
+                }
             },
-            report: dailyData
+            analysis: {
+                por_dia_semana: weekdayAnalysis.map(wd => ({
+                    dia: wd.dia_semana,
+                    asistencias: wd.total_asistencias,
+                    tardanzas: wd.total_tardanzas,
+                    promedio_por_dia: wd.dias_contados > 0 ? Math.round(wd.total_asistencias / wd.dias_contados) : 0
+                })),
+                top_5_ausentes: topAusentes.map(emp => ({
+                    id: emp.id,
+                    nombre: emp.nombre,
+                    cargo: emp.cargo || '--',
+                    departamento: emp.departamento || '--',
+                    dias_ausente: emp.dias_ausente,
+                    dias_presente: emp.dias_presente,
+                    porcentaje_asistencia: emp.porcentaje_asistencia
+                }))
+            },
+            report: dailyData.map(d => ({
+                fecha: d.fecha,
+                dia_semana: d.dia_semana,
+                empleados_presentes: d.empleados_presentes || 0,
+                total_empleados: d.total_empleados_activos,
+                tardanzas: d.tardanzas || 0,
+                porcentaje_asistencia: d.porcentaje_asistencia_dia || 0
+            }))
         });
 
     } catch (error) {
@@ -716,7 +826,11 @@ router.get('/monthly-consolidated', verifyToken, async (req, res) => {
     }
 });
 
-// 6. Reporte de Horas Extras
+/**
+ * REPORTE 6: Horas Extras
+ * Detalle de horas extras trabajadas por empleado
+ * Control de costos y detección de sobrecarga de trabajo
+ */
 router.get('/overtime', verifyToken, async (req, res) => {
     let connection = null;
     try {
@@ -728,35 +842,142 @@ router.get('/overtime', verifyToken, async (req, res) => {
 
         connection = await pool.getConnection();
 
-        // TODO: Implementar cálculo real de horas extras
-        // Por ahora retornamos estructura básica
-        const [results] = await connection.execute(`
+        // Obtener todas las marcaciones del período con cálculo de horas trabajadas
+        const [overtimeData] = await connection.execute(`
             SELECT 
                 e.id,
                 e.cedula,
                 e.nombre,
-                
                 e.cargo,
                 e.departamento,
-                COUNT(DISTINCT ar.fecha) as dias_trabajados
+                ar.fecha,
+                e.horario_entrada,
+                e.horario_salida,
+                e.horario_almuerzo_inicio,
+                e.horario_almuerzo_fin,
+                -- Horas de entrada y salida
+                MIN(CASE WHEN ar.contexto = 'jornada_entrada' THEN ar.hora END) as hora_entrada,
+                MAX(CASE WHEN ar.contexto = 'jornada_salida' THEN ar.hora END) as hora_salida,
+                -- Tiempo de almuerzo
+                MIN(CASE WHEN ar.contexto = 'almuerzo_salida' THEN ar.hora END) as almuerzo_salida,
+                MAX(CASE WHEN ar.contexto = 'almuerzo_entrada' THEN ar.hora END) as almuerzo_entrada
             FROM employees e
-            LEFT JOIN attendance_records ar ON e.id = ar.employee_id 
-                AND ar.fecha BETWEEN ? AND ?
+            INNER JOIN attendance_records ar ON e.id = ar.employee_id
             WHERE e.estado = 'activo'
-            GROUP BY e.id, e.cedula, e.nombre,  e.cargo, e.departamento
-            ORDER BY e.departamento, e.nombre
+                AND ar.fecha BETWEEN ? AND ?
+            GROUP BY e.id, e.cedula, e.nombre, e.cargo, e.departamento, ar.fecha,
+                     e.horario_entrada, e.horario_salida, e.horario_almuerzo_inicio, e.horario_almuerzo_fin
+            HAVING hora_entrada IS NOT NULL AND hora_salida IS NOT NULL
+            ORDER BY e.departamento, e.nombre, ar.fecha
         `, [startDate, endDate]);
 
-        const report = results.map(r => ({
-            id: r.id,
-            cedula: r.cedula,
-            nombre: `${r.nombre}`,
-            cargo: r.cargo,
-            departamento: r.departamento,
-            horas_extras: 0, // TODO: Calcular horas reales
-            costo_estimado: 0,
-            dias_con_extras: 0
+        // Procesar datos para calcular horas extras
+        const empleadosMap = new Map();
+
+        overtimeData.forEach(day => {
+            if (!day.hora_entrada || !day.hora_salida || !day.horario_salida) return;
+
+            // Calcular minutos trabajados
+            const [entradaH, entradaM] = day.hora_entrada.split(':').map(Number);
+            const [salidaH, salidaM] = day.hora_salida.split(':').map(Number);
+            const minutosEntrada = entradaH * 60 + entradaM;
+            const minutosSalida = salidaH * 60 + salidaM;
+
+            let minutosTrabajados = minutosSalida - minutosEntrada;
+
+            // Restar tiempo de almuerzo si se registró
+            if (day.almuerzo_salida && day.almuerzo_entrada) {
+                const [almSalH, almSalM] = day.almuerzo_salida.split(':').map(Number);
+                const [almEntH, almEntM] = day.almuerzo_entrada.split(':').map(Number);
+                const minutosAlmuerzo = (almEntH * 60 + almEntM) - (almSalH * 60 + almSalM);
+                minutosTrabajados -= minutosAlmuerzo;
+            } else {
+                // Si no registró almuerzo pero tiene horario configurado, restar 1 hora (60 min)
+                minutosTrabajados -= 60;
+            }
+
+            // Calcular hora de salida esperada
+            const [salidaEspH, salidaEspM] = day.horario_salida.split(':').map(Number);
+            const minutosSalidaEsperada = salidaEspH * 60 + salidaEspM;
+
+            // Horas extras = diferencia entre salida real y salida esperada (si trabajó más)
+            let minutosExtras = 0;
+            if (minutosSalida > minutosSalidaEsperada) {
+                minutosExtras = minutosSalida - minutosSalidaEsperada;
+            }
+
+            // Tolerancia: solo contar si trabajó más de 30 minutos extra
+            if (minutosExtras < 30) minutosExtras = 0;
+
+            if (minutosExtras > 0) {
+                if (!empleadosMap.has(day.id)) {
+                    empleadosMap.set(day.id, {
+                        id: day.id,
+                        cedula: day.cedula,
+                        nombre: day.nombre,
+                        cargo: day.cargo || '--',
+                        departamento: day.departamento || '--',
+                        total_minutos_extras: 0,
+                        dias_con_extras: 0,
+                        detalle_dias: []
+                    });
+                }
+
+                const emp = empleadosMap.get(day.id);
+                emp.total_minutos_extras += minutosExtras;
+                emp.dias_con_extras++;
+                emp.detalle_dias.push({
+                    fecha: day.fecha,
+                    hora_entrada: day.hora_entrada,
+                    hora_salida: day.hora_salida,
+                    hora_salida_esperada: day.horario_salida,
+                    minutos_extras: minutosExtras,
+                    horas_extras: (minutosExtras / 60).toFixed(2)
+                });
+            }
+        });
+
+        // Convertir a array y calcular totales
+        const report = Array.from(empleadosMap.values()).map(emp => ({
+            id: emp.id,
+            cedula: emp.cedula,
+            nombre: emp.nombre,
+            cargo: emp.cargo,
+            departamento: emp.departamento,
+            total_horas_extras: parseFloat((emp.total_minutos_extras / 60).toFixed(2)),
+            total_minutos_extras: emp.total_minutos_extras,
+            dias_con_extras: emp.dias_con_extras,
+            promedio_horas_por_dia: parseFloat((emp.total_minutos_extras / emp.dias_con_extras / 60).toFixed(2)),
+            detalle_dias: emp.detalle_dias
         }));
+
+        // Ordenar por más horas extras
+        report.sort((a, b) => b.total_horas_extras - a.total_horas_extras);
+
+        // Estadísticas generales
+        const totalHorasExtras = report.reduce((sum, e) => sum + e.total_horas_extras, 0);
+        const totalEmpleadosConExtras = report.length;
+
+        // Análisis por departamento
+        const departamentos = {};
+        report.forEach(emp => {
+            if (!departamentos[emp.departamento]) {
+                departamentos[emp.departamento] = {
+                    departamento: emp.departamento,
+                    empleados_con_extras: 0,
+                    total_horas_extras: 0
+                };
+            }
+            departamentos[emp.departamento].empleados_con_extras++;
+            departamentos[emp.departamento].total_horas_extras += emp.total_horas_extras;
+        });
+
+        const porDepartamento = Object.values(departamentos).sort((a, b) =>
+            b.total_horas_extras - a.total_horas_extras
+        );
+
+        // Top 5 con más horas extras
+        const top5 = report.slice(0, 5);
 
         connection.release();
 
@@ -764,9 +985,22 @@ router.get('/overtime', verifyToken, async (req, res) => {
             period: { start: startDate, end: endDate },
             report,
             stats: {
-                total_horas_extras: 0,
-                costo_total: 0,
-                empleados_con_extras: 0
+                total_empleados_con_extras: totalEmpleadosConExtras,
+                total_horas_extras: parseFloat(totalHorasExtras.toFixed(2)),
+                promedio_horas_por_empleado: totalEmpleadosConExtras > 0
+                    ? parseFloat((totalHorasExtras / totalEmpleadosConExtras).toFixed(2))
+                    : 0,
+                departamento_con_mas_extras: porDepartamento[0]?.departamento || 'N/A'
+            },
+            analysis: {
+                por_departamento: porDepartamento,
+                top_5_empleados: top5.map(e => ({
+                    id: e.id,
+                    nombre: e.nombre,
+                    departamento: e.departamento,
+                    total_horas_extras: e.total_horas_extras,
+                    dias_con_extras: e.dias_con_extras
+                }))
             }
         });
 
