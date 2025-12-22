@@ -1,6 +1,6 @@
 import React, { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine, Shield, AlarmClockPlus, Settings, QrCode, ChevronLeft, CalendarCheck, Key } from 'lucide-react'; // Añadir Key icon
+import { LayoutDashboard, Users, FileBarChart, LogOut, ScanLine, Shield, AlarmClockPlus, Settings, QrCode, ChevronLeft, CalendarCheck, Key, Clock } from 'lucide-react'; // Añadir Clock icon
 import { AppContext } from '../App';
 import { useSidebar } from '../src/context/SidebarContext';
 import { usePermissions } from '../src/context/PermissionsContext';
@@ -121,6 +121,9 @@ export const Sidebar: React.FC = () => {
           }
           {canAccessModule('roles') &&
             <SidebarLink to="/admin/roles-permissions" icon={<Key size={20} />} label="Roles y Permisos" />
+          }
+          {(authState.user?.role === 'superadmin' || canAccessModule('employees')) &&
+            <SidebarLink to="/admin/shifts" icon={<Clock size={20} />} label="Horarios" />
           }
 
           <div className={`

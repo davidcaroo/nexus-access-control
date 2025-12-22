@@ -22,6 +22,7 @@ export interface Employee {
   foto: string;
   cargo: string;
   departamento: string;
+  shift_id?: string | null;
   horario_entrada: string;
   horario_salida:string;
   horario_almuerzo_inicio?: string | null;

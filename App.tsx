@@ -24,6 +24,7 @@ import PublicLeaveRequest from './src/pages/PublicLeaveRequest';
 import LeaveRequestsManagement from './src/pages/LeaveRequestsManagement';
 import RolePermissionManagement from './src/pages/RolePermissionManagement'; // Importar la nueva página
 import ResetPassword from './src/pages/ResetPassword'; // Importar página de restauración de contraseña
+import ShiftManagement from './src/pages/ShiftManagement'; // Gestión de turnos/horarios
 
 // Context for global state
 export const AppContext = React.createContext<{
@@ -363,8 +364,7 @@ const AppRoutes = () => {
         <Route path="leave-requests" element={<LeaveRequestsManagement />} />
         <Route path="overtime" element={<OvertimeReport />} />
         <Route path="users" element={<UserManagement />} />
-        <Route path="roles-permissions" element={<RolePermissionManagement />} />
-        <Route path="settings" element={<Settings />} />
+        <Route path="roles-permissions" element={<RolePermissionManagement />} />        <Route path="shifts" element={<ShiftManagement />} />        <Route path="settings" element={<Settings />} />
         <Route path="reports" element={<Reports />} />
         <Route path="reports-operational" element={<ReportsOperational />} />
         <Route index element={<Navigate to="/admin/dashboard" />} />

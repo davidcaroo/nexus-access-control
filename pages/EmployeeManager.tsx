@@ -31,6 +31,26 @@ const EmployeeManager: React.FC = () => {
   const [showQrModal, setShowQrModal] = useState(false);
   const [selectedEmployeeForQr, setSelectedEmployeeForQr] = useState<Employee | null>(null);
 
+  // Cargar turnos disponibles
+  const [shifts, setShifts] = useState<any[]>([]);
+  const [loadingShifts, setLoadingShifts] = useState(false);
+
+  React.useEffect(() => {
+    loadShifts();
+  }, []);
+
+  const loadShifts = async () => {
+    try {
+      setLoadingShifts(true);
+      const response = await apiClient.get('/shifts?active_only=true');
+      setShifts(response.data || []);
+    } catch (error) {
+      console.error('Error cargando turnos:', error);
+    } finally {
+      setLoadingShifts(false);
+    }
+  };
+
   const filteredEmployees = employees.filter(e =>
     e.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
     e.cedula.includes(searchTerm) ||
@@ -457,22 +477,51 @@ const EmployeeManager: React.FC = () => {
                 <Input label="Nombre Completo *" value={formData.nombre || ''} onChange={e => setFormData({ ...formData, nombre: e.target.value })} required />
                 <Input label="Cargo" value={formData.cargo || ''} onChange={e => setFormData({ ...formData, cargo: e.target.value })} />
                 <Input label="Departamento" value={formData.departamento || ''} onChange={e => setFormData({ ...formData, departamento: e.target.value })} />
-                <Input label="Hora Entrada" type="time" value={formData.horario_entrada || '09:00'} onChange={e => setFormData({ ...formData, horario_entrada: e.target.value })} />
-                <Input label="Hora Salida" type="time" value={formData.horario_salida || '18:00'} onChange={e => setFormData({ ...formData, horario_salida: e.target.value })} />
-                <Input
-                  label="Inicio Almuerzo (Opcional)"
-                  type="time"
-                  value={formData.horario_almuerzo_inicio || ''}
-                  onChange={e => setFormData({ ...formData, horario_almuerzo_inicio: e.target.value })}
-                  placeholder="Ej: 12:00"
-                />
-                <Input
-                  label="Fin Almuerzo (Opcional)"
-                  type="time"
-                  value={formData.horario_almuerzo_fin || ''}
-                  onChange={e => setFormData({ ...formData, horario_almuerzo_fin: e.target.value })}
-                  placeholder="Ej: 13:00"
-                />
+
+                {/* Selector de Turno */}
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Turno / Horario
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={formData.shift_id || ''}
+                    onChange={e => setFormData({ ...formData, shift_id: e.target.value || null })}
+                  >
+                    <option value="">Sin turno asignado (usar horarios individuales)</option>
+                    {shifts.map(shift => (
+                      <option key={shift.id} value={shift.id}>
+                        {shift.nombre} - {shift.descripcion}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Si selecciona un turno, los horarios se tomarán automáticamente según el día de la semana
+                  </p>
+                </div>
+
+                {/* Horarios manuales (solo si no hay turno) */}
+                {!formData.shift_id && (
+                  <>
+                    <Input label="Hora Entrada" type="time" value={formData.horario_entrada || '09:00'} onChange={e => setFormData({ ...formData, horario_entrada: e.target.value })} />
+                    <Input label="Hora Salida" type="time" value={formData.horario_salida || '18:00'} onChange={e => setFormData({ ...formData, horario_salida: e.target.value })} />
+                    <Input
+                      label="Inicio Almuerzo (Opcional)"
+                      type="time"
+                      value={formData.horario_almuerzo_inicio || ''}
+                      onChange={e => setFormData({ ...formData, horario_almuerzo_inicio: e.target.value })}
+                      placeholder="Ej: 12:00"
+                    />
+                    <Input
+                      label="Fin Almuerzo (Opcional)"
+                      type="time"
+                      value={formData.horario_almuerzo_fin || ''}
+                      onChange={e => setFormData({ ...formData, horario_almuerzo_fin: e.target.value })}
+                      placeholder="Ej: 13:00"
+                    />
+                  </>
+                )}
+
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Estado</label><select className="w-full px-3 py-2 border border-gray-300 rounded-lg" value={formData.estado} onChange={e => setFormData({ ...formData, estado: e.target.value as any })}><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></div>
               </div>
             </div>
