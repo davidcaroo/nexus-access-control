@@ -43,9 +43,11 @@ const EmployeeManager: React.FC = () => {
     try {
       setLoadingShifts(true);
       const response = await apiClient.get('/shifts?active_only=true');
-      setShifts(response.data || []);
+      // response ya ES el array, no está en .data
+      setShifts(Array.isArray(response) ? response : []);
     } catch (error) {
       console.error('Error cargando turnos:', error);
+      setShifts([]);
     } finally {
       setLoadingShifts(false);
     }
@@ -480,24 +482,43 @@ const EmployeeManager: React.FC = () => {
 
                 {/* Selector de Turno */}
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Turno / Horario
                   </label>
                   <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 shadow-sm hover:border-gray-400 transition-colors cursor-pointer appearance-none bg-no-repeat bg-right pr-10"
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                      backgroundPosition: 'right 0.5rem center',
+                      backgroundSize: '1.5em 1.5em'
+                    }}
                     value={formData.shift_id || ''}
                     onChange={e => setFormData({ ...formData, shift_id: e.target.value || null })}
                   >
-                    <option value="">Sin turno asignado (usar horarios individuales)</option>
+                    <option value="" className="text-gray-500">
+                      Sin turno asignado (usar horarios individuales)
+                    </option>
                     {shifts.map(shift => (
-                      <option key={shift.id} value={shift.id}>
-                        {shift.nombre} - {shift.descripcion}
+                      <option key={shift.id} value={shift.id} className="text-gray-900 py-2">
+                        {shift.nombre}
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Si selecciona un turno, los horarios se tomarán automáticamente según el día de la semana
-                  </p>
+                  {formData.shift_id && shifts.find(s => s.id === formData.shift_id) && (
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-800 font-medium">
+                        {shifts.find(s => s.id === formData.shift_id)?.descripcion}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        Los horarios se aplicarán automáticamente según el día de la semana
+                      </p>
+                    </div>
+                  )}
+                  {!formData.shift_id && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      💡 Selecciona un turno predefinido o configura horarios individuales más abajo
+                    </p>
+                  )}
                 </div>
 
                 {/* Horarios manuales (solo si no hay turno) */}
@@ -506,14 +527,14 @@ const EmployeeManager: React.FC = () => {
                     <Input label="Hora Entrada" type="time" value={formData.horario_entrada || '09:00'} onChange={e => setFormData({ ...formData, horario_entrada: e.target.value })} />
                     <Input label="Hora Salida" type="time" value={formData.horario_salida || '18:00'} onChange={e => setFormData({ ...formData, horario_salida: e.target.value })} />
                     <Input
-                      label="Inicio Almuerzo (Opcional)"
+                      label="Inicio Almuerzo"
                       type="time"
                       value={formData.horario_almuerzo_inicio || ''}
                       onChange={e => setFormData({ ...formData, horario_almuerzo_inicio: e.target.value })}
                       placeholder="Ej: 12:00"
                     />
                     <Input
-                      label="Fin Almuerzo (Opcional)"
+                      label="Fin Almuerzo"
                       type="time"
                       value={formData.horario_almuerzo_fin || ''}
                       onChange={e => setFormData({ ...formData, horario_almuerzo_fin: e.target.value })}

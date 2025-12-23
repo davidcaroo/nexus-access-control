@@ -356,7 +356,7 @@ const ShiftManagement: React.FC = () => {
 
                                                         <div>
                                                             <label className="block text-xs font-medium text-gray-600 mb-1">
-                                                                Almuerzo Inicio (Opcional)
+                                                                Almuerzo Inicio
                                                             </label>
                                                             <input
                                                                 type="time"
@@ -369,7 +369,7 @@ const ShiftManagement: React.FC = () => {
 
                                                         <div>
                                                             <label className="block text-xs font-medium text-gray-600 mb-1">
-                                                                Almuerzo Fin (Opcional)
+                                                                Almuerzo Fin
                                                             </label>
                                                             <input
                                                                 type="time"
