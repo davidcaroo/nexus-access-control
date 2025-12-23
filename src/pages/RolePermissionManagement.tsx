@@ -351,7 +351,7 @@ const RolePermissionManagement: React.FC = () => {
                     <h4 className="font-semibold text-sm text-gray-800 mb-3 pb-2 border-b">🕐 Horarios</h4>
                     <div className="space-y-2">
                       {allPermissions
-                        .filter(p => p.action.startsWith('shifts:'))
+                        .filter(p => p.action.startsWith('shifts:') && p.action !== 'shifts:manage')
                         .map(permission => (
                           <div key={permission.id} className="flex items-center">
                             <input
