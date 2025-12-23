@@ -26,11 +26,18 @@ export const PermissionsProvider: React.FC<{ children: ReactNode }> = ({ childre
       // Para superadmin, dar todos los permisos
       if (authState.user?.role === 'superadmin') {
         setPermissions([
+          // Employees
           'employees:read', 'employees:create', 'employees:update', 'employees:delete',
+          // Attendance
           'attendance:view', 'attendance:record', 'attendance:delete',
+          // Leave requests
           'leave_requests:view', 'leave_requests:create', 'leave_requests:approve', 'leave_requests:reject',
+          // Users
           'users:read', 'users:create', 'users:update', 'users:delete', 'users:ban',
-          'roles:manage', 'permissions:manage'
+          // Roles & permissions
+          'roles:manage', 'permissions:manage',
+          // Shifts module permissions (important for admin/superadmin UX)
+          'shifts:create', 'shifts:read', 'shifts:update', 'shifts:delete', 'shifts:manage'
         ]);
       } else {
         // Para otros roles, obtener permisos del backend
