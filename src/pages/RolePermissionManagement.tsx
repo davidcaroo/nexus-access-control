@@ -346,6 +346,29 @@ const RolePermissionManagement: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* HORARIOS */}
+                  <div className="border rounded-lg p-4 bg-gray-50">
+                    <h4 className="font-semibold text-sm text-gray-800 mb-3 pb-2 border-b">🕐 Horarios</h4>
+                    <div className="space-y-2">
+                      {allPermissions
+                        .filter(p => p.action.startsWith('shifts:'))
+                        .map(permission => (
+                          <div key={permission.id} className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id={`perm-${permission.action}`}
+                              checked={roleFormData.permissions.includes(permission.action)}
+                              onChange={() => handlePermissionToggle(permission.action)}
+                              className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                            />
+                            <label htmlFor={`perm-${permission.action}`} className="ml-2 text-sm text-gray-700 cursor-pointer">
+                              {permission.description}
+                            </label>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
                   {/* USUARIOS */}
                   <div className="border rounded-lg p-4 bg-gray-50">
                     <h4 className="font-semibold text-sm text-gray-800 mb-3 pb-2 border-b">👤 Usuarios</h4>

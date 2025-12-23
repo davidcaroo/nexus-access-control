@@ -286,6 +286,36 @@ VALUES
         'reports:advanced',
         'Acceso a reportes avanzados',
         NOW ()
+    ),
+    (
+        's1',
+        'shifts:create',
+        'Crear turnos/horarios',
+        NOW ()
+    ),
+    (
+        's2',
+        'shifts:read',
+        'Ver turnos/horarios',
+        NOW ()
+    ),
+    (
+        's3',
+        'shifts:update',
+        'Editar turnos/horarios',
+        NOW ()
+    ),
+    (
+        's4',
+        'shifts:delete',
+        'Eliminar turnos/horarios',
+        NOW ()
+    ),
+    (
+        's5',
+        'shifts:manage',
+        'Gestión completa de turnos',
+        NOW ()
     );
 
 INSERT INTO
@@ -307,7 +337,7 @@ FROM
 WHERE
     action NOT IN ('roles:manage', 'permissions:manage');
 
--- Role 3: hr_manager - Gestión de empleados, ausencias y reportes administrativos/estratégicos
+-- Role 3: hr_manager - Gestión de empleados, ausencias, reportes administrativos/estratégicos y turnos
 INSERT INTO
     role_permissions
 SELECT
@@ -319,6 +349,7 @@ WHERE
     action LIKE 'employees:%'
     OR action LIKE 'leave_requests:%'
     OR action LIKE 'attendance:%'
+    OR action LIKE 'shifts:%'
     OR action IN (
         'reports:view',
         'reports:create',

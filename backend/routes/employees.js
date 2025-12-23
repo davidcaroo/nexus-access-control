@@ -73,7 +73,8 @@ router.post('/', verifyToken, verifyAdminOrHR, async (req, res) => {
             horario_almuerzo_inicio,
             horario_almuerzo_fin,
             estado,
-            fecha_ingreso
+            fecha_ingreso,
+            shift_id
         } = req.body;
 
         if (!cedula || !nombre) {
@@ -86,8 +87,8 @@ router.post('/', verifyToken, verifyAdminOrHR, async (req, res) => {
 
         await connection.execute(
             `INSERT INTO employees 
-       (id, cedula, nombre, foto, cargo, departamento, horario_entrada, horario_salida, horario_almuerzo_inicio, horario_almuerzo_fin, estado, fecha_ingreso, qr_code_url) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, cedula, nombre, foto, cargo, departamento, horario_entrada, horario_salida, horario_almuerzo_inicio, horario_almuerzo_fin, estado, fecha_ingreso, qr_code_url, shift_id) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 id,
                 cedula,
@@ -101,7 +102,8 @@ router.post('/', verifyToken, verifyAdminOrHR, async (req, res) => {
                 horario_almuerzo_fin || null,
                 estado || 'activo',
                 fecha_ingreso || new Date().toISOString().split('T')[0],
-                qr_code_url
+                qr_code_url,
+                shift_id || null
             ]
         );
 
@@ -288,17 +290,9 @@ router.patch('/:id', verifyToken, verifyAdminOrHR, async (req, res) => {
             horario_salida,
             horario_almuerzo_inicio,
             horario_almuerzo_fin,
-            estado
+            estado,
+            shift_id
         } = req.body;
-
-        // Log para debugging
-        console.log('📝 Actualizando empleado:', id);
-        console.log('🍽️ Horarios de almuerzo recibidos:', {
-            inicio: horario_almuerzo_inicio,
-            fin: horario_almuerzo_fin,
-            tipo_inicio: typeof horario_almuerzo_inicio,
-            tipo_fin: typeof horario_almuerzo_fin
-        });
 
         connection = await pool.getConnection();
 
@@ -361,6 +355,11 @@ router.patch('/:id', verifyToken, verifyAdminOrHR, async (req, res) => {
         if (estado !== undefined) {
             updateFields.push('estado = ?');
             updateValues.push(estado);
+        }
+        if (shift_id !== undefined) {
+            updateFields.push('shift_id = ?');
+            // Permitir null o string vacío para quitar el turno
+            updateValues.push(shift_id === '' || shift_id === null ? null : shift_id);
         }
         if (qr_code_url) {
             updateFields.push('qr_code_url = ?');

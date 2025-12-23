@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Users, Clock, Calendar, Save, X, AlertCircle } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
+import { ConfirmationModal } from '../components/ConfirmationModal';
+import { usePermissions } from '../context/PermissionsContext';
+import toast from 'react-hot-toast';
 
 interface ShiftDetail {
     id?: string;
@@ -36,12 +39,15 @@ const dayNames: Record<string, string> = {
 const dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 const ShiftManagement: React.FC = () => {
+    const { can } = usePermissions();
     const [shifts, setShifts] = useState<Shift[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingShift, setEditingShift] = useState<Shift | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [shiftToDelete, setShiftToDelete] = useState<Shift | null>(null);
 
     // Form state
     const [formData, setFormData] = useState({
@@ -78,6 +84,10 @@ const ShiftManagement: React.FC = () => {
     };
 
     const handleCreate = () => {
+        if (!can('shifts:create')) {
+            toast.error('No tienes permisos para crear turnos');
+            return;
+        }
         setEditingShift(null);
         setFormData({
             nombre: '',
@@ -95,6 +105,10 @@ const ShiftManagement: React.FC = () => {
     };
 
     const handleEdit = (shift: Shift) => {
+        if (!can('shifts:update')) {
+            toast.error('No tienes permisos para editar turnos');
+            return;
+        }
         setEditingShift(shift);
         setFormData({
             nombre: shift.nombre,
@@ -110,20 +124,29 @@ const ShiftManagement: React.FC = () => {
         setShowForm(true);
     };
 
-    const handleDelete = async (shiftId: string) => {
-        if (!confirm('¿Estás seguro de eliminar este turno? Esta acción no se puede deshacer.')) {
+    const openDeleteModal = (shift: Shift) => {
+        if (!can('shifts:delete')) {
+            toast.error('No tienes permisos para eliminar turnos');
             return;
         }
+        setShiftToDelete(shift);
+        setShowDeleteModal(true);
+    };
+
+    const handleDelete = async () => {
+        if (!shiftToDelete) return;
 
         try {
-            await apiClient.delete(`/shifts/${shiftId}`);
-            setSuccess('Turno eliminado exitosamente');
+            await apiClient.delete(`/shifts/${shiftToDelete.id}`);
+            toast.success('Turno eliminado exitosamente');
             loadShifts();
-            setTimeout(() => setSuccess(null), 3000);
+            setShowDeleteModal(false);
+            setShiftToDelete(null);
         } catch (error: any) {
             console.error('Error eliminando turno:', error);
-            setError(error.response?.data?.error || 'Error al eliminar el turno');
-            setTimeout(() => setError(null), 5000);
+            toast.error(error.response?.data?.error || 'Error al eliminar el turno');
+            setShowDeleteModal(false);
+            setShiftToDelete(null);
         }
     };
 
@@ -131,21 +154,30 @@ const ShiftManagement: React.FC = () => {
         e.preventDefault();
         setError(null);
 
+        // Validar permisos
+        if (editingShift && !can('shifts:update')) {
+            toast.error('No tienes permisos para actualizar turnos');
+            return;
+        }
+        if (!editingShift && !can('shifts:create')) {
+            toast.error('No tienes permisos para crear turnos');
+            return;
+        }
+
         try {
             if (editingShift) {
                 await apiClient.put(`/shifts/${editingShift.id}`, formData);
-                setSuccess('Turno actualizado exitosamente');
+                toast.success('Turno actualizado exitosamente');
             } else {
                 await apiClient.post('/shifts', formData);
-                setSuccess('Turno creado exitosamente');
+                toast.success('Turno creado exitosamente');
             }
 
             setShowForm(false);
             loadShifts();
-            setTimeout(() => setSuccess(null), 3000);
         } catch (error: any) {
             console.error('Error guardando turno:', error);
-            setError(error.response?.data?.error || 'Error al guardar el turno');
+            toast.error(error.response?.data?.error || 'Error al guardar el turno');
         }
     };
 
@@ -217,13 +249,15 @@ const ShiftManagement: React.FC = () => {
                             Configure los turnos y horarios laborales para sus empleados
                         </p>
                     </div>
-                    <button
-                        onClick={handleCreate}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors"
-                    >
-                        <Plus className="w-5 h-5" />
-                        Crear Turno
-                    </button>
+                    {can('shifts:create') && (
+                        <button
+                            onClick={handleCreate}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors"
+                        >
+                            <Plus className="w-5 h-5" />
+                            Crear Turno
+                        </button>
+                    )}
                 </div>
 
                 {/* Alerts */}
@@ -427,22 +461,28 @@ const ShiftManagement: React.FC = () => {
                                             <p className="text-blue-100 text-sm mt-1">{shift.descripcion}</p>
                                         )}
                                     </div>
-                                    <div className="flex items-center gap-2 ml-4">
-                                        <button
-                                            onClick={() => handleEdit(shift)}
-                                            className="p-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors"
-                                            title="Editar turno"
-                                        >
-                                            <Edit2 className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(shift.id)}
-                                            className="p-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors"
-                                            title="Eliminar turno"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
+                                    {(can('shifts:update') || can('shifts:delete')) && (
+                                        <div className="flex items-center gap-2 ml-4">
+                                            {can('shifts:update') && (
+                                                <button
+                                                    onClick={() => handleEdit(shift)}
+                                                    className="p-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors"
+                                                    title="Editar turno"
+                                                >
+                                                    <Edit2 className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            {can('shifts:delete') && (
+                                                <button
+                                                    onClick={() => openDeleteModal(shift)}
+                                                    className="p-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors"
+                                                    title="Eliminar turno"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -509,8 +549,25 @@ const ShiftManagement: React.FC = () => {
                             Crear Primer Turno
                         </button>
                     </div>
-                )}
-            </div>
+                )}            </div>
+
+            {/* Modal de confirmación de eliminación */}
+            <ConfirmationModal
+                isOpen={showDeleteModal}
+                onClose={() => {
+                    setShowDeleteModal(false);
+                    setShiftToDelete(null);
+                }}
+                onConfirm={handleDelete}
+                title="Eliminar Turno"
+                message={`¿Estás seguro de eliminar el turno "${shiftToDelete?.nombre}"? Esta acción no se puede deshacer.${shiftToDelete && shiftToDelete.empleados_count > 0
+                        ? `\n\nActualmente ${shiftToDelete.empleados_count} empleado${shiftToDelete.empleados_count > 1 ? 's' : ''} tiene${shiftToDelete.empleados_count === 1 ? '' : 'n'} asignado este turno.`
+                        : ''
+                    }`}
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                type="danger"
+            />
         </div>
     );
 };

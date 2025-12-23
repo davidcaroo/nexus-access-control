@@ -122,7 +122,7 @@ export const Sidebar: React.FC = () => {
           {canAccessModule('roles') &&
             <SidebarLink to="/admin/roles-permissions" icon={<Key size={20} />} label="Roles y Permisos" />
           }
-          {(authState.user?.role === 'superadmin' || canAccessModule('employees')) &&
+          {canAccessModule('shifts') &&
             <SidebarLink to="/admin/shifts" icon={<Clock size={20} />} label="Horarios" />
           }
 
