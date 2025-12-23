@@ -176,6 +176,18 @@ class APIClient {
     return response.json();
   }
 
+  async put(endpoint: string, data: any) {
+    const response = await this.fetchWithAuth(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || errorData.error || 'Request failed');
+    }
+    return response.json();
+  }
+
   async patch(endpoint: string, data: any, retries = 3) {
     let lastError: Error | null = null;
     

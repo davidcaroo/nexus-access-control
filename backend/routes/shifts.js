@@ -378,13 +378,13 @@ router.delete('/:id', verifyToken, checkShiftManagementPermission, async (req, r
 
         // Verificar que no hay empleados con este turno
         const [employeesWithShift] = await connection.execute(
-            'SELECT COUNT(*) as count FROM employees WHERE shift_id = ?',
+            "SELECT COUNT(*) as count FROM employees WHERE shift_id = ? AND estado = 'activo'",
             [id]
         );
 
         if (employeesWithShift[0].count > 0) {
             return res.status(400).json({
-                error: 'No se puede eliminar un turno con empleados asignados. Reasigna los empleados primero.'
+                error: 'Error al eliminar. El horario tiene empleados activos asignados'
             });
         }
 

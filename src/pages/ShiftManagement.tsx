@@ -144,7 +144,8 @@ const ShiftManagement: React.FC = () => {
             setShiftToDelete(null);
         } catch (error: any) {
             console.error('Error eliminando turno:', error);
-            toast.error(error.response?.data?.error || 'Error al eliminar el turno');
+            const msg = (error && (error.message || (error.response && error.response.data && error.response.data.error))) || 'Error al eliminar el turno';
+            toast.error(msg);
             setShowDeleteModal(false);
             setShiftToDelete(null);
         }
@@ -177,7 +178,8 @@ const ShiftManagement: React.FC = () => {
             loadShifts();
         } catch (error: any) {
             console.error('Error guardando turno:', error);
-            toast.error(error.response?.data?.error || 'Error al guardar el turno');
+            const msg = (error && (error.message || (error.response && error.response.data && error.response.data.error))) || 'Error al guardar el turno';
+            toast.error(msg);
         }
     };
 
@@ -561,8 +563,8 @@ const ShiftManagement: React.FC = () => {
                 onConfirm={handleDelete}
                 title="Eliminar Turno"
                 message={`¿Estás seguro de eliminar el turno "${shiftToDelete?.nombre}"? Esta acción no se puede deshacer.${shiftToDelete && shiftToDelete.empleados_count > 0
-                        ? `\n\nActualmente ${shiftToDelete.empleados_count} empleado${shiftToDelete.empleados_count > 1 ? 's' : ''} tiene${shiftToDelete.empleados_count === 1 ? '' : 'n'} asignado este turno.`
-                        : ''
+                    ? `\n\nActualmente ${shiftToDelete.empleados_count} empleado${shiftToDelete.empleados_count > 1 ? 's' : ''} tiene${shiftToDelete.empleados_count === 1 ? '' : 'n'} asignado este turno.`
+                    : ''
                     }`}
                 confirmText="Eliminar"
                 cancelText="Cancelar"
