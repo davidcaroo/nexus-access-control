@@ -2,6 +2,7 @@ import React, { useState, useContext, useRef, useEffect } from 'react';
 import { AppContext } from '../../App';
 import { apiClient } from '../services/apiClient';
 import { Card, Input, Button } from '../../components/UIComponents';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 import { Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -17,6 +18,56 @@ const Settings: React.FC = () => {
 
   const [isPasswordResetSending, setIsPasswordResetSending] = useState(false);
 
+  // Biometric devices UI state
+  const [devices, setDevices] = useState<any[]>([]);
+  const [isLoadingDevices, setIsLoadingDevices] = useState(false);
+  const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false);
+  const [editingDevice, setEditingDevice] = useState<any | null>(null);
+  const [isSavingDevice, setIsSavingDevice] = useState(false);
+  const [isTestingDeviceId, setIsTestingDeviceId] = useState<number | null>(null);
+  const [isSyncingDeviceId, setIsSyncingDeviceId] = useState<number | null>(null);
+  const [deviceToDelete, setDeviceToDelete] = useState<any | null>(null);
+  const [modalForm, setModalForm] = useState<any>({
+    name: '',
+    model: 'F16',
+    ip: '',
+    port: 4370,
+    protocol: 'tcp',
+    username: '',
+    password: '',
+    polling_interval: 300,
+    enabled: true,
+  });
+
+  useEffect(() => {
+    if (editingDevice) {
+      setModalForm({
+        name: editingDevice.name || '',
+        model: editingDevice.model || 'F16',
+        ip: editingDevice.ip || '',
+        port: editingDevice.port || 4370,
+        protocol: editingDevice.protocol || 'tcp',
+        username: editingDevice.username || '',
+        password: editingDevice.password || '',
+        polling_interval: editingDevice.polling_interval || 300,
+        enabled: editingDevice.enabled !== undefined ? editingDevice.enabled : true,
+        id: editingDevice.id,
+      });
+    } else {
+      setModalForm({
+        name: '',
+        model: 'F16',
+        ip: '',
+        port: 4370,
+        protocol: 'tcp',
+        username: '',
+        password: '',
+        polling_interval: 300,
+        enabled: true,
+      });
+    }
+  }, [editingDevice, isDeviceModalOpen]);
+
   // Configuración del sistema (solo superadmin)
   const [allowMultipleAttendance, setAllowMultipleAttendance] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
@@ -26,6 +77,13 @@ const Settings: React.FC = () => {
   useEffect(() => {
     if (user?.role === 'superadmin') {
       loadSettings();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    // load devices for admins and superadmins
+    if (user && (user.role === 'superadmin' || user.role === 'admin')) {
+      loadDevices();
     }
   }, [user]);
 
@@ -140,6 +198,95 @@ const Settings: React.FC = () => {
     }
   };
 
+  // --- Biometric devices actions (UI only; backend endpoints may be stubs)
+  const loadDevices = async () => {
+    setIsLoadingDevices(true);
+    try {
+      const data = await apiClient.get('/biometrics/devices');
+      setDevices(data || []);
+    } catch (err) {
+      console.error('Error loading devices', err);
+      toast.error('Error al cargar los dispositivos biométricos');
+    } finally {
+      setIsLoadingDevices(false);
+    }
+  };
+
+  const openNewDeviceModal = () => {
+    setEditingDevice(null);
+    setIsDeviceModalOpen(true);
+  };
+
+  const openEditDeviceModal = (d: any) => {
+    setEditingDevice(d);
+    setIsDeviceModalOpen(true);
+  };
+
+  const saveDevice = async (device: any) => {
+    setIsSavingDevice(true);
+    try {
+      if (device.id) {
+        await apiClient.patch(`/biometrics/devices/${device.id}`, device);
+        toast.success('Dispositivo actualizado');
+      } else {
+        await apiClient.post('/biometrics/devices', device);
+        toast.success('Dispositivo creado');
+      }
+      setIsDeviceModalOpen(false);
+      await loadDevices();
+    } catch (err: any) {
+      console.error('Error saving device', err);
+      toast.error(err.message || 'Error al guardar dispositivo');
+    } finally {
+      setIsSavingDevice(false);
+    }
+  };
+
+  const testConnection = async (deviceId: number) => {
+    setIsTestingDeviceId(deviceId);
+    try {
+      await apiClient.post(`/biometrics/devices/${deviceId}/test`);
+      toast.success('Conexión exitosa');
+      await loadDevices();
+    } catch (err: any) {
+      console.error('Test connection error', err);
+      toast.error(err.message || 'Error en la conexión');
+    } finally {
+      setIsTestingDeviceId(null);
+    }
+  };
+
+  const forceSync = async (deviceId: number) => {
+    setIsSyncingDeviceId(deviceId);
+    try {
+      await apiClient.post(`/biometrics/devices/${deviceId}/sync`);
+      toast.success('Sincronización iniciada');
+      await loadDevices();
+    } catch (err: any) {
+      console.error('Sync error', err);
+      toast.error(err.message || 'Error al sincronizar');
+    } finally {
+      setIsSyncingDeviceId(null);
+    }
+  };
+
+  const confirmDeleteDevice = (d: any) => {
+    setDeviceToDelete(d);
+  };
+
+  const deleteDevice = async () => {
+    if (!deviceToDelete) return;
+    try {
+      await apiClient.delete(`/biometrics/devices/${deviceToDelete.id}`);
+      toast.success('Dispositivo eliminado');
+      setDeviceToDelete(null);
+      await loadDevices();
+    } catch (err: any) {
+      console.error('Delete device error', err);
+      toast.error(err.message || 'Error al eliminar');
+    }
+  };
+
   if (!user) return <div>Cargando...</div>;
 
   return (
@@ -173,35 +320,39 @@ const Settings: React.FC = () => {
             <h2 className="text-xl font-bold">{user.full_name}</h2>
             <p className="text-gray-500">{user.email}</p>
           </Card>
+
+          <div className="space-y-6 mt-6">
+            <Card title="Información de Perfil">
+              <form onSubmit={handleProfileUpdate} className="space-y-4">
+                <Input
+                  label="Nombre Completo"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                />
+                <div className="text-center">
+                  <Button type="submit" isLoading={isProfileSaving}>Guardar Cambios</Button>
+                </div>
+              </form>
+            </Card>
+
+            <Card title="Cambiar Contraseña">
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Para cambiar tu contraseña, contacta al administrador del sistema.
+                </p>
+                <div className="text-center">
+                  <Button onClick={handlePasswordResetRequest} isLoading={isPasswordResetSending}>
+                    Solicitar cambio de contraseña
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
+
         </div>
 
         <div className="lg:col-span-2 space-y-6">
-          <Card title="Información de Perfil">
-            <form onSubmit={handleProfileUpdate} className="space-y-4">
-              <Input
-                label="Nombre Completo"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
-              <div className="text-right">
-                <Button type="submit" isLoading={isProfileSaving}>Guardar Cambios</Button>
-              </div>
-            </form>
-          </Card>
-
-          <Card title="Cambiar Contraseña">
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600">
-                Para cambiar tu contraseña, contacta al administrador del sistema.
-              </p>
-              <div className="text-right">
-                <Button onClick={handlePasswordResetRequest} isLoading={isPasswordResetSending}>
-                  Solicitar cambio de contraseña
-                </Button>
-              </div>
-            </div>
-          </Card>
 
           {user?.role === 'superadmin' && (
             <Card title="Configuración del Sistema">
@@ -230,6 +381,54 @@ const Settings: React.FC = () => {
                   Estado actual: {allowMultipleAttendance ? '✅ Habilitado' : '❌ Deshabilitado'}
                 </p>
               </div>
+            </Card>
+          )}
+          {(user?.role === 'superadmin' || user?.role === 'admin') && (
+            <Card title="Biométricos">
+              <div className="mb-4 flex items-center gap-2">
+                <Button type="button" onClick={openNewDeviceModal}>Agregar dispositivo</Button>
+                <Button type="button" variant="outline" onClick={loadDevices} className="ml-auto" isLoading={isLoadingDevices}>Refrescar</Button>
+              </div>
+
+              {isLoadingDevices ? (
+                <div className="text-center py-6 text-gray-400">Cargando dispositivos...</div>
+              ) : devices.length === 0 ? (
+                <div className="text-center py-6 text-gray-400">No hay dispositivos configurados.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b text-gray-500 uppercase text-xs">
+                        <th className="px-4 py-2">Nombre</th>
+                        <th className="px-4 py-2">Modelo</th>
+                        <th className="px-4 py-2">IP:Puerto</th>
+                        <th className="px-4 py-2">Estado</th>
+                        <th className="px-4 py-2">Últ. Sync</th>
+                        <th className="px-4 py-2 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {devices.map((d) => (
+                        <tr key={d.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 font-medium">{d.name}</td>
+                          <td className="px-4 py-3">{d.model}</td>
+                          <td className="px-4 py-3">{d.ip}:{d.port}</td>
+                          <td className="px-4 py-3">{d.enabled ? '✅ Activo' : '❌ Inactivo'}</td>
+                          <td className="px-4 py-3">{d.last_sync || '—'}</td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button size="sm" variant="outline" onClick={() => openEditDeviceModal(d)}>Editar</Button>
+                              <Button size="sm" variant="outline" onClick={() => testConnection(d.id)} isLoading={isTestingDeviceId === d.id}>Probar</Button>
+                              <Button size="sm" variant="outline" onClick={() => forceSync(d.id)} isLoading={isSyncingDeviceId === d.id}>Sync</Button>
+                              <Button size="sm" variant="danger" onClick={() => confirmDeleteDevice(d)}>Eliminar</Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </Card>
           )}
         </div>

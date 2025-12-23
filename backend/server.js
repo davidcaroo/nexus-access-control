@@ -17,6 +17,7 @@ import userRoutes from './routes/users.js';
 import roleRoutes from './routes/roles.js';
 import uploadsRoutes from './routes/uploads.js';
 import settingsRoutes from './routes/settings.js';
+import biometricsRoutes from './routes/biometrics.js';
 import reportsRoutes from './routes/reports.js';
 import shiftsRoutes from './routes/shifts.js';
 
@@ -54,6 +55,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/uploads', uploadsRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/biometrics', biometricsRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/shifts', shiftsRoutes);
 
